@@ -1,0 +1,78 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: release macOS (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.8"
+          cache: true
+      - run: go test ./internal/platform ./internal/app
+      - name: Repeated native service lifecycle checks
+        run: for attempt in 1 2 3; do bash scripts/test-macos.sh; done
+
+  release:
+    needs: macos
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.8"
+          cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+      - run: go test ./...
+      - run: go vet ./...
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: go build -trimpath -o claude-usage ./cmd/claude-usage
+      - run: npm test
+        env:
+          CLAUDE_USAGE_BIN: ./claude-usage
+      - name: Build release binaries
+        run: VERSION="${GITHUB_REF_NAME#v}" bash ./scripts/build.sh
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NOTES_FILE="docs/releases/${GITHUB_REF_NAME}.md"
+          ASSETS=(
+            dist/claude-usage-darwin-amd64
+            dist/claude-usage-darwin-arm64
+            dist/claude-usage-linux-amd64
+            dist/claude-usage-linux-arm64
+            dist/claude-usage-windows-amd64.exe
+            dist/claude-usage-windows-arm64.exe
+            dist/SHA256SUMS
+          )
+          if [[ -f "$NOTES_FILE" ]]; then
+            gh release create "$GITHUB_REF_NAME" "${ASSETS[@]}" \
+              --title "claude-usage ${GITHUB_REF_NAME}" \
+              --notes-file "$NOTES_FILE"
+          else
+            gh release create "$GITHUB_REF_NAME" "${ASSETS[@]}" \
+              --title "claude-usage ${GITHUB_REF_NAME}" \
+              --generate-notes
+          fi

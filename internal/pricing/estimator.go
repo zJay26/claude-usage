@@ -1,0 +1,528 @@
+package pricing
+
+import (
+	"fmt"
+	"math"
+	"sort"
+	"strings"
+	"time"
+
+	"github.com/zJay26/claude-usage/internal/model"
+)
+
+type UnpricedReason struct {
+	Kind   string `json:"kind"`
+	Model  string `json:"model,omitempty"`
+	Tokens int64  `json:"tokens"`
+	Detail string `json:"detail"`
+}
+
+type Estimate struct {
+	RegularModeUSD     string           `json:"regular_mode_usd"`
+	FastModeUSD        string           `json:"fast_mode_usd"`
+	StandardBaseUSD    string           `json:"standard_base_usd"`
+	FastSurchargeUSD   string           `json:"fast_surcharge_usd"`
+	USD                string           `json:"usd"`
+	RegularInputUSD    string           `json:"regular_input_usd"`
+	CachedInputUSD     string           `json:"cached_input_usd"`
+	CacheWriteInputUSD string           `json:"cache_write_input_usd"`
+	OutputUSD          string           `json:"output_usd"`
+	PricedTokens       int64            `json:"priced_tokens"`
+	UnpricedTokens     int64            `json:"unpriced_tokens"`
+	CoverageRatio      float64          `json:"coverage_ratio"`
+	Reasons            []UnpricedReason `json:"reasons,omitempty"`
+}
+
+type ReportPoint struct {
+	Modes    model.ModeUsage  `json:"modes"`
+	Date     string           `json:"date"`
+	Time     time.Time        `json:"time"`
+	Usage    model.TokenUsage `json:"usage"`
+	Estimate Estimate         `json:"estimate"`
+}
+
+type ModelEstimate struct {
+	Modes    model.ModeUsage  `json:"modes"`
+	Key      string           `json:"key"`
+	Usage    model.TokenUsage `json:"usage"`
+	Estimate Estimate         `json:"estimate"`
+}
+
+type Report struct {
+	FastRulesAsOf string          `json:"fast_rules_as_of"`
+	Modes         model.ModeUsage `json:"modes"`
+	Basis         string          `json:"basis"`
+	Currency      string          `json:"currency"`
+	CatalogAsOf   string          `json:"catalog_as_of"`
+	Bucket        string          `json:"bucket"`
+	Summary       Estimate        `json:"summary"`
+	Points        []ReportPoint   `json:"points"`
+	Models        []ModelEstimate `json:"models"`
+}
+
+type Builder struct {
+	location  *time.Location
+	basis     string
+	overrides map[string]Override
+	summary   aggregate
+	points    map[string]*aggregate
+	models    map[string]*aggregate
+}
+
+type aggregate struct {
+	modes                                                  model.ModeUsage
+	regularModeNano, fastModeNano, baseNano, surchargeNano int64
+	usage                                                  model.TokenUsage
+	regularNano                                            int64
+	cachedNano                                             int64
+	cacheWriteNano                                         int64
+	outputNano                                             int64
+	totalNano                                              int64
+	pricedTokens                                           int64
+	unpricedTokens                                         int64
+	totalTokens                                            int64
+	reasons                                                map[string]UnpricedReason
+}
+
+type evaluatedEvent struct {
+	mode                    string
+	baseNano, surchargeNano int64
+	usage                   model.TokenUsage
+	regularNano             int64
+	cachedNano              int64
+	cacheWriteNano          int64
+	outputNano              int64
+	pricedTokens            int64
+	unpricedTokens          int64
+	reasons                 []UnpricedReason
+}
+
+func NewBuilder(overrides map[string]Override) (*Builder, error) {
+	normalized, err := NormalizeOverrides(overrides)
+	if err != nil {
+		return nil, err
+	}
+	return &Builder{
+		overrides: normalized, basis: Basis,
+		points: map[string]*aggregate{},
+		models: map[string]*aggregate{},
+	}, nil
+}
+
+func (b *Builder) Add(event model.UsageEvent) error {
+	evaluated, err := evaluateWithBasis(event, b.overrides, b.basis)
+	if err != nil {
+		return err
+	}
+	if err := b.summary.add(evaluated); err != nil {
+		return err
+	}
+	modelKey := strings.TrimSpace(event.Model)
+	if modelKey == "" {
+		modelKey = "未知模型"
+	}
+	modelAggregate := b.models[modelKey]
+	if modelAggregate == nil {
+		modelAggregate = &aggregate{}
+		b.models[modelKey] = modelAggregate
+	}
+	if err := modelAggregate.add(evaluated); err != nil {
+		return err
+	}
+	if !event.Timestamp.IsZero() {
+		date := event.LocalDate
+		if date == "" {
+			date = event.Timestamp.In(b.Location()).Format("2006-01-02")
+		}
+		pointAggregate := b.points[date]
+		if pointAggregate == nil {
+			pointAggregate = &aggregate{}
+			b.points[date] = pointAggregate
+		}
+		if err := pointAggregate.add(evaluated); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (b *Builder) Report() Report {
+	pointKeys := make([]string, 0, len(b.points))
+	for key := range b.points {
+		pointKeys = append(pointKeys, key)
+	}
+	sort.Strings(pointKeys)
+	points := make([]ReportPoint, 0, len(pointKeys))
+	for _, key := range pointKeys {
+		item := b.points[key]
+		pointTime, _ := time.ParseInLocation("2006-01-02", key, time.UTC)
+		points = append(points, ReportPoint{
+			Date: key, Time: pointTime,
+			Usage: item.usage, Modes: item.modes, Estimate: item.estimate(),
+		})
+	}
+	models := make([]ModelEstimate, 0, len(b.models))
+	for key, item := range b.models {
+		models = append(models, ModelEstimate{Key: key, Usage: item.usage, Modes: item.modes, Estimate: item.estimate()})
+	}
+	sort.Slice(models, func(i, j int) bool {
+		if models[i].Usage.Total == models[j].Usage.Total {
+			return models[i].Key < models[j].Key
+		}
+		return models[i].Usage.Total > models[j].Usage.Total
+	})
+	return Report{
+		Basis: b.basis, FastRulesAsOf: FastRulesAsOf, Modes: b.summary.modes, Currency: Currency, CatalogAsOf: CatalogAsOf, Bucket: "day",
+		Summary: b.summary.estimate(), Points: points, Models: models,
+	}
+}
+
+// FillDaily inserts quiet zero-value points for local natural days. The until
+// bound remains exclusive when it lands exactly at local midnight.
+func FillDaily(report Report, since, until, now time.Time, locations ...*time.Location) (Report, error) {
+	loc := time.Local
+	if len(locations) > 0 && locations[0] != nil {
+		loc = locations[0]
+	}
+	localDay := func(value time.Time) time.Time {
+		local := value.In(loc)
+		return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc)
+	}
+	var start time.Time
+	if !since.IsZero() {
+		start = localDay(since)
+	} else if len(report.Points) > 0 {
+		start, _ = time.ParseInLocation("2006-01-02", report.Points[0].Date, loc)
+	}
+	if start.IsZero() {
+		return report, nil
+	}
+	var end time.Time
+	if until.IsZero() {
+		end = localDay(now).AddDate(0, 0, 1)
+	} else {
+		end = localDay(until)
+		localUntil := until.In(loc)
+		if !localUntil.Equal(end) {
+			end = end.AddDate(0, 0, 1)
+		}
+	}
+	if !end.After(start) {
+		report.Points = []ReportPoint{}
+		return report, nil
+	}
+	const maxPoints = 5000
+	days := 0
+	for day := start; day.Before(end); day = day.AddDate(0, 0, 1) {
+		days++
+		if days > maxPoints {
+			return Report{}, fmt.Errorf("每日费用范围超过 %d 天", maxPoints)
+		}
+	}
+	existing := make(map[string]ReportPoint, len(report.Points))
+	for _, point := range report.Points {
+		existing[point.Date] = point
+	}
+	points := make([]ReportPoint, 0, days)
+	for day := start; day.Before(end); day = day.AddDate(0, 0, 1) {
+		date := day.Format("2006-01-02")
+		if point, ok := existing[date]; ok {
+			points = append(points, point)
+			continue
+		}
+		points = append(points, ReportPoint{
+			Date:     date,
+			Time:     day.UTC(),
+			Estimate: aggregate{}.estimate(),
+		})
+	}
+	report.Points = points
+	return report, nil
+}
+
+func localDay(value time.Time) time.Time {
+	local := value.In(time.Local)
+	return time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, time.Local)
+}
+
+func evaluateEvent(event model.UsageEvent, overrides map[string]Override) (evaluatedEvent, error) {
+	usage := event.Usage
+	out := evaluatedEvent{usage: usage}
+	modelName := strings.TrimSpace(event.Model)
+	if !usage.NonNegative() {
+		out.unpricedTokens = maxInt64(usage.Total, 0)
+		out.reasons = append(out.reasons, UnpricedReason{
+			Kind: "invalid_token_categories", Model: modelName, Tokens: out.unpricedTokens,
+			Detail: "Token 分类关系不一致，未参与费用估算",
+		})
+		return out, nil
+	}
+	categoryTotal, addErr := checkedAdd(usage.Input, usage.Output)
+	if addErr != nil {
+		return out, fmt.Errorf("Input 与 Output Token 合计溢出: %w", addErr)
+	}
+	if usage.Total == 0 && categoryTotal > 0 {
+		usage.Total = categoryTotal
+		out.usage.Total = categoryTotal
+	}
+	total := usage.Total
+	if usage.CachedInput > usage.Input || usage.CacheWriteInput > usage.Input-usage.CachedInput ||
+		usage.ReasoningOutput > usage.Output || usage.CacheWrite5m > usage.CacheWriteInput || usage.CacheWrite1h > usage.CacheWriteInput-usage.CacheWrite5m {
+		out.unpricedTokens = maxInt64(total, 0)
+		out.reasons = append(out.reasons, UnpricedReason{
+			Kind: "invalid_token_categories", Model: modelName, Tokens: out.unpricedTokens,
+			Detail: "Token 分类关系不一致，未参与费用估算",
+		})
+		return out, nil
+	}
+	if usage.Input == 0 && usage.Output == 0 && total > 0 {
+		out.unpricedTokens = total
+		out.reasons = append(out.reasons, UnpricedReason{
+			Kind: "missing_token_categories", Model: modelName, Tokens: total,
+			Detail: "只有累计总量，缺少 Input 与 Output 拆分",
+		})
+		return out, nil
+	}
+	if usage.Total > 0 && usage.Total != categoryTotal {
+		out.unpricedTokens = total
+		out.reasons = append(out.reasons, UnpricedReason{
+			Kind: "invalid_token_categories", Model: modelName, Tokens: total,
+			Detail: "Token 分类关系不一致，未参与费用估算",
+		})
+		return out, nil
+	}
+	rate, found, err := Resolve(modelName, overrides)
+	if err != nil {
+		return out, err
+	}
+	if !found {
+		out.unpricedTokens = total
+		out.reasons = append(out.reasons, UnpricedReason{
+			Kind: "unknown_model", Model: modelName, Tokens: total,
+			Detail: "没有公开 API 单价或本机定价覆写",
+		})
+		return out, nil
+	}
+	if usage.Input > 200000 && (rate.CanonicalModel == "claude-sonnet-4" || rate.CanonicalModel == "claude-sonnet-4-5") && !rate.Custom {
+		out.unpricedTokens = total
+		out.reasons = append(out.reasons, UnpricedReason{Kind: "long_context_unavailable", Model: modelName, Tokens: total, Detail: "Legacy long-context tier is not present in the current API price table"})
+		return out, nil
+	}
+	regularTokens := usage.Input - usage.CachedInput - usage.CacheWriteInput
+	regularCost, err := tokenCost(regularTokens, rate.InputNanoPerToken, 1, 1)
+	if err != nil {
+		return out, err
+	}
+	cachedCost, err := tokenCost(usage.CachedInput, rate.CachedNanoPerToken, 1, 1)
+	if err != nil {
+		return out, err
+	}
+	outputCost, err := tokenCost(usage.Output, rate.OutputNanoPerToken, 1, 1)
+	if err != nil {
+		return out, err
+	}
+	out.regularNano = regularCost
+	out.cachedNano = cachedCost
+	out.outputNano = outputCost
+	out.pricedTokens = regularTokens + usage.CachedInput + usage.Output
+
+	for _, part := range []struct {
+		tokens int64
+		rate   *int64
+		label  string
+	}{{usage.CacheWrite5m, rate.CacheWriteNanoPerToken, "5m"}, {usage.CacheWrite1h, rate.CacheWrite1hNanoPerToken, "1h"}} {
+		if part.tokens == 0 {
+			continue
+		}
+		if part.rate == nil {
+			out.unpricedTokens += part.tokens
+			out.reasons = append(out.reasons, UnpricedReason{Kind: "cache_write_rate_missing", Model: modelName, Tokens: part.tokens, Detail: "Cache write " + part.label + " rate unavailable"})
+			continue
+		}
+		cost, e := tokenCost(part.tokens, *part.rate, 1, 1)
+		if e != nil {
+			return out, e
+		}
+		out.cacheWriteNano, e = checkedAdd(out.cacheWriteNano, cost)
+		if e != nil {
+			return out, e
+		}
+		out.pricedTokens += part.tokens
+	}
+	if unknown := usage.CacheWriteInput - usage.CacheWrite5m - usage.CacheWrite1h; unknown > 0 {
+		out.unpricedTokens += unknown
+		out.reasons = append(out.reasons, UnpricedReason{Kind: "cache_ttl_unknown", Model: modelName, Tokens: unknown, Detail: "缓存写入期限未知 / Cache write TTL unknown"})
+	}
+
+	return out, nil
+}
+
+func (a *aggregate) add(event evaluatedEvent) error {
+	var err error
+	if a.usage, err = addUsage(a.usage, event.usage); err != nil {
+		return err
+	}
+	if a.regularNano, err = checkedAdd(a.regularNano, event.regularNano); err != nil {
+		return err
+	}
+	if a.cachedNano, err = checkedAdd(a.cachedNano, event.cachedNano); err != nil {
+		return err
+	}
+	if a.cacheWriteNano, err = checkedAdd(a.cacheWriteNano, event.cacheWriteNano); err != nil {
+		return err
+	}
+	if a.outputNano, err = checkedAdd(a.outputNano, event.outputNano); err != nil {
+		return err
+	}
+	eventNano, err := checkedAdd(event.regularNano, event.cachedNano)
+	if err != nil {
+		return err
+	}
+	eventNano, err = checkedAdd(eventNano, event.cacheWriteNano)
+	if err != nil {
+		return err
+	}
+	eventNano, err = checkedAdd(eventNano, event.outputNano)
+	if err != nil {
+		return err
+	}
+	if a.totalNano, err = checkedAdd(a.totalNano, eventNano); err != nil {
+		return err
+	}
+	a.modes.Add(event.usage, event.mode)
+	modeAmount := &a.regularModeNano
+	if event.mode == model.ModeFast {
+		modeAmount = &a.fastModeNano
+	}
+	if *modeAmount, err = checkedAdd(*modeAmount, eventNano); err != nil {
+		return err
+	}
+	if a.baseNano, err = checkedAdd(a.baseNano, event.baseNano); err != nil {
+		return err
+	}
+	if a.surchargeNano, err = checkedAdd(a.surchargeNano, event.surchargeNano); err != nil {
+		return err
+	}
+	if a.pricedTokens, err = checkedAdd(a.pricedTokens, event.pricedTokens); err != nil {
+		return err
+	}
+	if a.unpricedTokens, err = checkedAdd(a.unpricedTokens, event.unpricedTokens); err != nil {
+		return err
+	}
+	eventTokens, err := checkedAdd(event.pricedTokens, event.unpricedTokens)
+	if err != nil {
+		return err
+	}
+	if a.totalTokens, err = checkedAdd(a.totalTokens, eventTokens); err != nil {
+		return err
+	}
+	if len(event.reasons) > 0 && a.reasons == nil {
+		a.reasons = map[string]UnpricedReason{}
+	}
+	for _, reason := range event.reasons {
+		key := reason.Kind + "\x00" + reason.Model + "\x00" + reason.Detail
+		current := a.reasons[key]
+		current.Kind, current.Model, current.Detail = reason.Kind, reason.Model, reason.Detail
+		current.Tokens, err = checkedAdd(current.Tokens, reason.Tokens)
+		if err != nil {
+			return err
+		}
+		a.reasons[key] = current
+	}
+	return nil
+}
+
+func (a aggregate) estimate() Estimate {
+	coverage := 0.0
+	if a.totalTokens > 0 {
+		coverage = float64(a.pricedTokens) / float64(a.totalTokens)
+	}
+	reasons := make([]UnpricedReason, 0, len(a.reasons))
+	for _, reason := range a.reasons {
+		reasons = append(reasons, reason)
+	}
+	sort.Slice(reasons, func(i, j int) bool {
+		if reasons[i].Tokens == reasons[j].Tokens {
+			if reasons[i].Kind == reasons[j].Kind {
+				return reasons[i].Model < reasons[j].Model
+			}
+			return reasons[i].Kind < reasons[j].Kind
+		}
+		return reasons[i].Tokens > reasons[j].Tokens
+	})
+	return Estimate{
+		RegularModeUSD: formatNanoUSD(a.regularModeNano), FastModeUSD: formatNanoUSD(a.fastModeNano), StandardBaseUSD: formatNanoUSD(a.baseNano), FastSurchargeUSD: formatNanoUSD(a.surchargeNano),
+		USD: formatNanoUSD(a.totalNano), RegularInputUSD: formatNanoUSD(a.regularNano),
+		CachedInputUSD: formatNanoUSD(a.cachedNano), CacheWriteInputUSD: formatNanoUSD(a.cacheWriteNano),
+		OutputUSD: formatNanoUSD(a.outputNano), PricedTokens: a.pricedTokens,
+		UnpricedTokens: a.unpricedTokens, CoverageRatio: coverage, Reasons: reasons,
+	}
+}
+
+func tokenCost(tokens, nanoPerToken, numerator, denominator int64) (int64, error) {
+	if tokens < 0 || nanoPerToken < 0 || numerator <= 0 || denominator <= 0 {
+		return 0, fmt.Errorf("无效费用计算参数")
+	}
+	if tokens != 0 && nanoPerToken > math.MaxInt64/tokens {
+		return 0, fmt.Errorf("费用计算溢出")
+	}
+	base := tokens * nanoPerToken
+	if numerator != 1 {
+		if base > math.MaxInt64/numerator {
+			return 0, fmt.Errorf("费用倍率计算溢出")
+		}
+		base *= numerator
+	}
+	if denominator > 1 {
+		quotient, remainder := base/denominator, base%denominator
+		if remainder >= denominator/2+denominator%2 {
+			quotient++
+		}
+		base = quotient
+	}
+	return base, nil
+}
+
+func addUsage(left, right model.TokenUsage) (model.TokenUsage, error) {
+	values := []*int64{&left.Input, &left.CachedInput, &left.CacheWriteInput, &left.CacheWrite5m, &left.CacheWrite1h, &left.Output, &left.ReasoningOutput, &left.Total}
+	additions := []int64{right.Input, right.CachedInput, right.CacheWriteInput, right.CacheWrite5m, right.CacheWrite1h, right.Output, right.ReasoningOutput, right.Total}
+	for index := range values {
+		value, err := checkedAdd(*values[index], additions[index])
+		if err != nil {
+			return model.TokenUsage{}, err
+		}
+		*values[index] = value
+	}
+	return left, nil
+}
+
+func checkedAdd(left, right int64) (int64, error) {
+	if right > 0 && left > math.MaxInt64-right {
+		return 0, fmt.Errorf("费用或 Token 累计溢出")
+	}
+	if right < 0 && left < math.MinInt64-right {
+		return 0, fmt.Errorf("费用或 Token 累计溢出")
+	}
+	return left + right, nil
+}
+
+func formatNanoUSD(value int64) string {
+	if value < 0 {
+		return "-" + formatNanoUSD(-value)
+	}
+	return fmt.Sprintf("%d.%09d", value/1_000_000_000, value%1_000_000_000)
+}
+
+func maxInt64(left, right int64) int64 {
+	if left > right {
+		return left
+	}
+	return right
+}
+
+func (b *Builder) Location() *time.Location {
+	if b.location != nil {
+		return b.location
+	}
+	return time.Local
+}

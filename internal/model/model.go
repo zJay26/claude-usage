@@ -1,0 +1,201 @@
+package model
+
+import (
+	"fmt"
+	"time"
+)
+
+const (
+	ProvenanceSessionJSONL = "session_jsonl"
+
+	ConfidenceExact       = "exact"
+	ConfidenceGapFallback = "gap_fallback"
+	// ConfidenceAggregateOnly remains a public export/filter value for
+	// compatibility with pre-1.0 databases. JSONL-only accounting does not
+	// create new aggregate-only events.
+	ConfidenceAggregateOnly = "aggregate_only"
+)
+
+// TokenUsage keeps overlapping token categories separate. CachedInput is a
+// subset of Input and ReasoningOutput is a subset of Output.
+type TokenUsage struct {
+	CacheWrite5m    int64 `json:"cache_write_5m"`
+	CacheWrite1h    int64 `json:"cache_write_1h"`
+	Input           int64 `json:"input"`
+	CachedInput     int64 `json:"cached_input"`
+	CacheWriteInput int64 `json:"cache_write_input"`
+	Output          int64 `json:"output"`
+	ReasoningOutput int64 `json:"reasoning_output"`
+	Total           int64 `json:"total"`
+}
+
+func (u TokenUsage) Add(v TokenUsage) TokenUsage {
+	return TokenUsage{
+		CacheWrite5m:    u.CacheWrite5m + v.CacheWrite5m,
+		CacheWrite1h:    u.CacheWrite1h + v.CacheWrite1h,
+		Input:           u.Input + v.Input,
+		CachedInput:     u.CachedInput + v.CachedInput,
+		CacheWriteInput: u.CacheWriteInput + v.CacheWriteInput,
+		Output:          u.Output + v.Output,
+		ReasoningOutput: u.ReasoningOutput + v.ReasoningOutput,
+		Total:           u.Total + v.Total,
+	}
+}
+
+func (u TokenUsage) Sub(v TokenUsage) TokenUsage {
+	return TokenUsage{
+		CacheWrite5m:    u.CacheWrite5m - v.CacheWrite5m,
+		CacheWrite1h:    u.CacheWrite1h - v.CacheWrite1h,
+		Input:           u.Input - v.Input,
+		CachedInput:     u.CachedInput - v.CachedInput,
+		CacheWriteInput: u.CacheWriteInput - v.CacheWriteInput,
+		Output:          u.Output - v.Output,
+		ReasoningOutput: u.ReasoningOutput - v.ReasoningOutput,
+		Total:           u.Total - v.Total,
+	}
+}
+
+func (u TokenUsage) Equal(v TokenUsage) bool {
+	return u == v
+}
+
+func (u TokenUsage) MonotonicFrom(v TokenUsage) bool {
+	return u.Input >= v.Input &&
+		u.CachedInput >= v.CachedInput &&
+		u.CacheWriteInput >= v.CacheWriteInput &&
+		u.Output >= v.Output &&
+		u.ReasoningOutput >= v.ReasoningOutput &&
+		u.Total >= v.Total
+}
+
+func (u TokenUsage) NonNegative() bool {
+	return u.CacheWrite5m >= 0 && u.CacheWrite1h >= 0 && u.Input >= 0 &&
+		u.CachedInput >= 0 &&
+		u.CacheWriteInput >= 0 &&
+		u.Output >= 0 &&
+		u.ReasoningOutput >= 0 &&
+		u.Total >= 0
+}
+
+func (u TokenUsage) IsZero() bool {
+	return u == TokenUsage{}
+}
+
+// Compatible fills totals missing from older records. It never adds subset
+// categories on top of their parent categories.
+func (u TokenUsage) Compatible() TokenUsage {
+	if u.Total == 0 && (u.Input != 0 || u.Output != 0) {
+		u.Total = u.Input + u.Output
+	}
+	return u
+}
+
+func (u TokenUsage) String() string {
+	return fmt.Sprintf("total=%d input=%d cached=%d cache_write=%d output=%d reasoning=%d",
+		u.Total, u.Input, u.CachedInput, u.CacheWriteInput, u.Output, u.ReasoningOutput)
+}
+
+type UsageEvent struct {
+	Sources       []string `json:"sources,omitempty"`
+	IterationType string   `json:"iteration_type,omitempty"`
+	ServiceMode
+	ID          string     `json:"id"`
+	Timestamp   time.Time  `json:"timestamp,omitempty"`
+	LocalDate   string     `json:"local_date,omitempty"`
+	LocalHour   string     `json:"local_hour,omitempty"`
+	Segment     int64      `json:"-"`
+	ObservedAt  time.Time  `json:"observed_at"`
+	MachineID   string     `json:"machine_id"`
+	SessionID   string     `json:"session_id,omitempty"`
+	TurnID      string     `json:"turn_id,omitempty"`
+	Model       string     `json:"model,omitempty"`
+	Source      string     `json:"source,omitempty"`
+	AgentType   string     `json:"agent_type,omitempty"`
+	ProjectPath string     `json:"project_path,omitempty"`
+	ThreadTitle string     `json:"thread_title,omitempty"`
+	Usage       TokenUsage `json:"usage"`
+	Provenance  string     `json:"provenance"`
+	Confidence  string     `json:"confidence"`
+	ClaudeHome  string     `json:"claude_home,omitempty"`
+}
+
+type SessionInfo struct {
+	ParentSessionID string    `json:"parent_session_id,omitempty"`
+	ForkedFromID    string    `json:"forked_from_id,omitempty"`
+	SessionID       string    `json:"session_id"`
+	RolloutPath     string    `json:"rollout_path,omitempty"`
+	ClaudeHome      string    `json:"claude_home,omitempty"`
+	Title           string    `json:"title,omitempty"`
+	ProjectPath     string    `json:"project_path,omitempty"`
+	Model           string    `json:"model,omitempty"`
+	Source          string    `json:"source,omitempty"`
+	ThreadSource    string    `json:"thread_source,omitempty"`
+	AgentType       string    `json:"agent_type,omitempty"`
+	CLIValue        string    `json:"cli_version,omitempty"`
+	TokensUsed      int64     `json:"tokens_used,omitempty"`
+	CreatedAt       time.Time `json:"created_at,omitempty"`
+	UpdatedAt       time.Time `json:"updated_at,omitempty"`
+	Archived        bool      `json:"archived"`
+}
+
+type Machine struct {
+	ID       string `json:"id"`
+	Label    string `json:"label"`
+	Hostname string `json:"hostname"`
+	OS       string `json:"os"`
+	Arch     string `json:"arch"`
+}
+
+type Warning struct {
+	ID          int64     `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	FirstSeen   time.Time `json:"first_seen"`
+	Occurrences int64     `json:"occurrences"`
+	Kind        string    `json:"kind"`
+	Path        string    `json:"path,omitempty"`
+	Detail      string    `json:"detail"`
+}
+
+type Filter struct {
+	Homes      []string `json:"homes,omitempty"`
+	Mode       string
+	CostBasis  string
+	Since      time.Time
+	Until      time.Time
+	SinceDate  string
+	UntilDate  string
+	Model      string
+	Source     string
+	AgentType  string
+	Project    string
+	SessionID  string
+	Search     string
+	Confidence string
+}
+
+type Summary struct {
+	Modes              ModeUsage  `json:"modes"`
+	Usage              TokenUsage `json:"usage"`
+	Unattributed       TokenUsage `json:"unattributed"`
+	GrandTotal         int64      `json:"grand_total"`
+	EventCount         int64      `json:"event_count"`
+	SessionCount       int64      `json:"session_count"`
+	FirstEvent         time.Time  `json:"first_event,omitempty"`
+	LastEvent          time.Time  `json:"last_event,omitempty"`
+	CoverageIncomplete bool       `json:"coverage_incomplete"`
+}
+
+type Point struct {
+	Modes ModeUsage  `json:"modes"`
+	Time  time.Time  `json:"time"`
+	Date  string     `json:"date,omitempty"`
+	Usage TokenUsage `json:"usage"`
+}
+
+type BreakdownItem struct {
+	Modes    ModeUsage  `json:"modes"`
+	Key      string     `json:"key"`
+	Usage    TokenUsage `json:"usage"`
+	Events   int64      `json:"events"`
+	Sessions int64      `json:"sessions"`
+}

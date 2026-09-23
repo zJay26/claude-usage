@@ -1,0 +1,12 @@
+/dist/
+/claude-usage
+/claude-usage.exe
+/node_modules/
+/test-results/
+/playwright-report/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+/.work/
+/artifacts/

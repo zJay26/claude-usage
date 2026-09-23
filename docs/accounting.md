@@ -1,0 +1,17 @@
+# Accounting contract / 计量约定
+
+The unit of accounting is a provider request, with a message identity fallback. File paths and session IDs are associations, not deduplication namespaces. Request/message aliases connect copies even when an earlier copy lacked `requestId`. One request may yield several usage rows only when an authoritative iteration list explicitly separates the calls. Iterations replace the top-level usage.
+
+`request_sources` preserves every observed home/path association. Repeated `home` filters use an `EXISTS` union predicate so mirrors cannot multiply aggregate rows. SQLite ingest transactions atomically persist events, identities and file cursors. API queries use SQLite read snapshots; related session statistics and prices share the same query filter and revision cache. Amounts are computed on query, never stored as historical billable charges.
+
+Counters are signed 64-bit integers with checked input addition. Amounts are integer USD nanodollars (nine decimal places). Input is inclusive of both cache categories. The unknown write lifetime is `cache_write_input - cache_write_5m - cache_write_1h`; it is never silently priced as 5 minutes. Output includes thinking. Missing thinking detail does not invent additional output.
+
+Incomplete usage can be enriched by a monotonic final record. Confirmed usage accepts cache-lifetime/known-mode enrichment and later iteration accounting that retains the original message. Conflicting finalized identity, model or counters produce diagnostics and retain confirmed usage. A stale partial mirror never downgrades a final record. Identity-poor records are either diagnosed with a UUID fallback or omitted when no usable identity exists.
+
+Source files are append-only inputs. The cursor stores byte offset, size, modification time and a SHA-256 prefix fingerprint. A half-written last line waits for completion. Large discarded content is streamed without materializing conversation bodies. Bad metadata is diagnosed, and parsing continues at the next newline. File disappearance retains history; a truncated or changed consumed prefix sets a durable rebuild requirement. `scan --rebuild` / an explicit dashboard approval resets derived statistics and rebuilds from currently available files, so deleted history can disappear only with this action.
+
+Windows WSL discovery runs with 10-second list and 20-second home-query deadlines. WSL transcript scans run in hidden worker processes with a 45-second deadline, using SQLite transactions for crash rollback. Other roots remain independently queryable; failed-source history is preserved. Linux distributions are addressed as their default user. Non-default WSL Claude directories not exposed in that environment can be added manually as UNC paths.
+
+The database's creation-time IANA timezone is reused across all roots and restarts. Event UTC timestamps and stored local calendar keys keep daily totals stable, including daylight-saving transitions. A browser's timezone does not redefine the ledger.
+
+The public API is an equivalent-price estimate. It excludes subscriptions, discounts, batch discounts, service/tool surcharges and real invoice reconciliation. Explicit Fast metadata is required to apply Fast rates. Unsupported Fast or legacy long-context pricing remains unpriced; the Standard comparison basis is available separately. Unknown future Claude models retain all tokens.

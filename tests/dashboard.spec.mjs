@@ -1,0 +1,1033 @@
+import { test, expect } from "@playwright/test";
+import { mkdir, mkdtemp, writeFile, rm, cp } from "node:fs/promises";
+import { once } from "node:events";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { spawn } from "node:child_process";
+import { setTimeout as delay } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
+
+let processHandle;
+let stateDir;
+let claudeHomeDir;
+let testBinaryDir;
+let baseURL;
+let dashboardURL;
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+async function findFreePort() {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address();
+      server.close((error) => error ? reject(error) : resolve(port));
+    });
+  });
+}
+
+async function buildTestBinary() {
+  testBinaryDir = await mkdtemp(path.join(tmpdir(), "claude-usage-e2e-bin-"));
+  const binary = path.join(testBinaryDir, process.platform === "win32" ? "claude-usage.exe" : "claude-usage");
+  const build = spawn(process.env.GO_BINARY || "go", ["build", "-trimpath", "-o", binary, "./cmd/claude-usage"], {
+    cwd: repoRoot,
+    stdio: "inherit",
+    windowsHide: true
+  });
+  await new Promise((resolve, reject) => {
+    build.once("error", reject);
+    build.once("exit", (code, signal) => {
+      if (code === 0) resolve();
+      else reject(new Error(`go build failed (code=${code}, signal=${signal || "none"})`));
+    });
+  });
+  return binary;
+}
+
+test.beforeAll(async () => {
+  const binary = process.env.CLAUDE_USAGE_BIN || await buildTestBinary();
+  stateDir = await mkdtemp(path.join(tmpdir(), "claude-usage-e2e-"));
+  const port = await findFreePort();
+  claudeHomeDir = await mkdtemp(path.join(tmpdir(), "claude-usage-claude-home-"));
+  const claudeHome = claudeHomeDir;
+  const now = new Date();
+  const currentHour = new Date(now);
+  currentHour.setMinutes(0, 0, 0);
+  const previousHourTimestamp = new Date(currentHour.getTime() - 30 * 60_000).toISOString();
+  const sessionDir = path.join(claudeHome, "projects", "demo");
+  await mkdir(sessionDir, { recursive: true });
+  const timestamp = now.toISOString();
+  const record = (id, at, input, read, output, thinking, speed="standard") => ({type:"assistant", timestamp:at, sessionId:"e2e-session", requestId:"req-"+id, cwd:"C:\\work\\claude-usage-e2e", entrypoint:"claude-desktop", message:{id:"msg-"+id, model:"claude-opus-5-5", stop_reason:"end_turn", usage:{input_tokens:input, cache_read_input_tokens:read, output_tokens:output, output_tokens_details:{thinking_tokens:thinking}, speed}}});
+  const fixture = [record("a", previousHourTimestamp, 36, 12, 12, 3), record("b", timestamp, 24, 8, 8, 2), record("c", timestamp, 40, 0, 20, 0, "fast")];
+  await writeFile(path.join(sessionDir, "rollout-e2e.jsonl"), `${fixture.map((item) => JSON.stringify(item)).join("\n")}\n`);
+  await writeFile(path.join(stateDir, "config.json"), JSON.stringify({
+    listen_address: "127.0.0.1",
+    port,
+    scan_interval_seconds: 600, auto_discover_wsl: false
+  }));
+  baseURL = `http://127.0.0.1:${port}`;
+  await writeFile(path.join(stateDir, ".claude-usage-updates.json"), JSON.stringify({ auto_check: false }));
+  dashboardURL = `${baseURL}/?lang=zh-CN`;
+  processHandle = spawn(path.resolve(binary), ["serve"], {
+    env: {
+      ...process.env,
+      CLAUDE_USAGE_HOME: stateDir,
+      CLAUDE_CONFIG_DIR: claudeHome
+    },
+    stdio: "ignore",
+    windowsHide: true
+  });
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${baseURL}/healthz`);
+      if (response.ok) {
+        const summary = await fetch(`${baseURL}/api/v1/summary?since=7d`);
+        if (summary.ok && (await summary.json()).grand_total >= 100) return;
+      }
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("claude-usage test server did not become ready");
+});
+
+test.afterAll(async () => {
+  if (processHandle && processHandle.exitCode === null && processHandle.signalCode === null) {
+    const exited = once(processHandle, "exit");
+    processHandle.kill();
+    await Promise.race([
+      exited,
+      delay(5_000).then(() => { throw new Error("claude-usage test server did not exit in time"); })
+    ]);
+  }
+  if (stateDir) await rm(stateDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  if (claudeHomeDir) await rm(claudeHomeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  if (testBinaryDir) await rm(testBinaryDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+});
+
+test("updates require a choice, support later and disabling checks, and show recovery", async ({ page }, testInfo) => {
+  let update = { current_version: "2.5.0", latest_version: "2.6.0", available: true, can_install: true, auto_check: true, phase: "idle", release_url: "https://github.com/zJay26/claude-usage/releases/tag/v2.6.0" };
+  const installs = [];
+  await page.route("**/api/v1/updates**", async (route) => {
+    const request = route.request();
+    if (request.url().endsWith("/preferences")) update.auto_check = request.postDataJSON().auto_check;
+    if (request.url().endsWith("/install")) { installs.push(request.postDataJSON()); update.phase = "downloading"; }
+    await route.fulfill({ json: update });
+  });
+  await page.goto(dashboardURL);
+  await expect(page.locator("#updateBanner")).toBeVisible();
+  expect(installs).toEqual([]);
+  await page.locator("#dismissUpdate").click();
+  await page.reload();
+  await expect(page.locator("#updateBanner")).toBeHidden();
+  await page.locator("#updateButton").click();
+  await expect(page.locator("#installUpdate")).toBeEnabled();
+  await page.locator("#autoCheckUpdates").uncheck();
+  await expect(page.locator("#autoCheckUpdates")).not.toBeChecked();
+  await expect(page.locator("#checkUpdates")).toBeEnabled();
+  await page.locator("#checkUpdates").click();
+  await expect(page.locator("#installUpdate")).toBeEnabled();
+  expect(installs).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath("updates-desktop.png") });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await expect(page.locator("#updateDialog")).toHaveCSS("color", "rgb(244, 238, 231)");
+  await page.screenshot({ path: testInfo.outputPath("updates-mobile-dark.png") });
+  expect(await page.locator("#updateDialog .dialog-frame").evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.locator("#installUpdate").click();
+  await expect(page.locator("#updateStatus")).toContainText("正在下载");
+  expect(installs).toEqual([{ version: "2.6.0", confirm: true }]);
+  await expect(page.locator("#installUpdate")).toBeDisabled();
+  update = { ...update, phase: "rolled_back", error: "Simulated startup failure" };
+  await expect(page.locator("#updateStatus")).toContainText("已恢复", { timeout: 10000 });
+  await expect(page.locator("#updateError")).toContainText("Simulated startup failure");
+  await expect(page.locator("#installUpdate")).toBeEnabled();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#updateDialog")).toBeHidden();
+  await page.goto(`${baseURL}/?lang=en`);
+  await page.locator("#updateButton").click();
+  await expect(page.locator("#updateTitle")).toHaveText("Software updates");
+  await expect(page.locator("#autoCheckUpdates")).not.toBeChecked();
+  expect(installs).toHaveLength(1);
+});
+
+test("update download directory saves, survives refresh, resets and opens only the saved path", async ({ page, context }, testInfo) => {
+  const defaultDir = "C:\\Users\\Demo\\Downloads\\claude-usage";
+  const chosenDir = "D:\\Downloads\\软件更新\\Claude Usage";
+  const update = { current_version: "2.6.1", latest_version: "2.7.0", available: true, can_install: true, auto_check: false, phase: "idle", download_dir: defaultDir, custom_download_dir: "", default_download_dir: defaultDir, can_open_download_dir: true, release_url: "https://github.com/zJay26/claude-usage/releases/tag/v2.7.0" };
+  const opened = [];
+  const installs = [];
+  await page.route("**/api/v1/updates**", async (route) => {
+    const request = route.request();
+    if (request.url().endsWith("/preferences")) {
+      const body = request.postDataJSON();
+      if (Object.hasOwn(body,"auto_check")) update.auto_check = body.auto_check;
+      if (Object.hasOwn(body,"download_dir")) { update.custom_download_dir = body.download_dir.trim(); update.download_dir = update.custom_download_dir || defaultDir; }
+    }
+    if (request.url().endsWith("/open-directory")) opened.push(update.download_dir);
+    if (request.url().endsWith("/install")) { installs.push(request.postDataJSON()); update.phase="downloading"; }
+    await route.fulfill({json:update});
+  });
+  await page.goto(dashboardURL);
+  await page.locator("#updateButton").click();
+  await expect(page.locator("#updateDownloadDir")).toHaveValue(defaultDir);
+  await page.locator("#updateDownloadDir").fill(chosenDir);
+  await expect(page.locator("#installUpdate")).toBeDisabled();
+  await expect(page.locator("#openUpdateDirectory")).toBeDisabled();
+  const refresh = page.waitForResponse((res) => res.url().endsWith("/api/v1/updates"));
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await refresh;
+  await expect(page.locator("#updateDownloadDir")).toHaveValue(chosenDir);
+  await page.locator("#updateDownloadDir").press("Enter");
+  await expect(page.locator("#saveUpdateDirectory")).toBeDisabled();
+  await expect(page.locator("#installUpdate")).toBeEnabled();
+  await expect(page.locator("#autoCheckUpdates")).not.toBeChecked();
+  await page.locator("#openUpdateDirectory").click();
+  await expect.poll(() => opened.length).toBe(1);
+  expect(opened).toEqual([chosenDir]);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"], {origin:baseURL});
+  await page.locator("#copyUpdateDirectory").click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(chosenDir);
+  await page.reload();
+  await page.locator("#updateButton").click();
+  await expect(page.locator("#updateDownloadDir")).toHaveValue(chosenDir);
+  await expect(page.locator("#updateDialog")).toHaveCSS("opacity","1");
+  await page.screenshot({path:testInfo.outputPath("download-directory-desktop.png"), animations:"disabled"});
+  await page.setViewportSize({width:390,height:844});
+  await page.evaluate(() => document.documentElement.dataset.theme="dark");
+  await expect(page.locator("#updateDialog")).toHaveCSS("color","rgb(244, 238, 231)");
+  await page.screenshot({path:testInfo.outputPath("download-directory-mobile.png"), animations:"disabled"});
+  expect(await page.locator("#updateDialog .dialog-frame").evaluate((el) => el.scrollWidth<=el.clientWidth)).toBe(true);
+  await page.locator("#resetUpdateDirectory").click();
+  await expect(page.locator("#updateDownloadDir")).toHaveValue(defaultDir);
+  await page.locator("#installUpdate").click();
+  await expect(page.locator("#updateDownloadDir")).toBeDisabled();
+  await expect(page.locator("#resetUpdateDirectory")).toBeDisabled();
+  expect(installs).toEqual([{version:"2.7.0",confirm:true}]);
+});
+
+test("preview updates preserve opt-out and never enable installation", async ({ page, request }) => {
+  await page.goto(dashboardURL);
+  await page.locator("#updateButton").click();
+  await expect(page.locator("#autoCheckUpdates")).not.toBeChecked();
+  await expect(page.locator("#installUpdate")).toBeDisabled();
+  await expect(page.locator("#updatePortable")).toBeVisible();
+  const rejected = await request.post(`${baseURL}/api/v1/updates/install`, { data: { version: "2.6.0" } });
+  expect(rejected.status()).toBe(400);
+});
+
+test("overview is calm, local-only, and exposes honest cost coverage", async ({ page }) => {
+  const consoleErrors = [];
+  const externalRequests = [];
+  page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
+  page.on("pageerror", (error) => consoleErrors.push(error.message));
+  page.on("request", (request) => {
+    if (new URL(request.url()).origin !== baseURL) externalRequests.push(request.url());
+  });
+  await page.goto(dashboardURL, { waitUntil: "networkidle" });
+
+  await expect(page.getByRole("heading", { name: "本机用量概览" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "概览" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByText("过去 7 个本地自然日")).toBeVisible();
+  const trend = page.locator("#usageTrendPanel");
+  await expect(trend.getByRole("heading", { name: "每日Token用量" })).toBeVisible();
+  await expect(trend.getByRole("tab", { name: "每日" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#trendHourlyPane")).toBeHidden();
+  await expect(page.locator("#trendDailyPane")).toBeVisible();
+  await trend.getByRole("tab", { name: "每小时" }).click();
+  await expect(trend.getByRole("heading", { name: "每小时Token用量" })).toBeVisible();
+  await expect(trend.getByRole("tab", { name: "每小时" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#view-overview").getByText("API 等价成本", { exact: true })).toBeVisible();
+  await expect(page.locator("#machineId")).not.toHaveText("—");
+  await expect(page.locator("#overviewCoverage")).toContainText("已定价 100.0% Token");
+  const styleIntegrity = await page.evaluate(() => ({
+    bodyFontSize: getComputedStyle(document.body).fontSize,
+    supportingFontSize: getComputedStyle(document.querySelector(".eyebrow")).fontSize,
+    skipTop: getComputedStyle(document.querySelector(".skip-link")).top,
+    topbarPosition: getComputedStyle(document.querySelector(".topbar")).position,
+    heroDisplay: getComputedStyle(document.querySelector(".hero-metrics")).display
+  }));
+  expect(styleIntegrity).toEqual({ bodyFontSize: "15px", supportingFontSize: "11px", skipTop: "-60px", topbarPosition: "sticky", heroDisplay: "grid" });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
+  expect(externalRequests).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+});
+
+test("hourly usage inspects the selected point and navigates across local days", async ({ page }) => {
+  const hourlyRequests = [];
+  const hourlyCostRequests = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/v1/timeseries" && url.searchParams.get("bucket") === "hour") hourlyRequests.push(url);
+    if (url.pathname === "/api/v1/cost-estimate" && url.searchParams.has("since") && url.searchParams.has("until")
+      && Date.parse(url.searchParams.get("until")) - Date.parse(url.searchParams.get("since")) === 60 * 60 * 1000) hourlyCostRequests.push(url);
+  });
+  await page.goto(dashboardURL, { waitUntil: "networkidle" });
+  const trend = page.locator("#usageTrendPanel");
+  await trend.getByRole("tab", { name: "每小时" }).click();
+  await expect(page.getByRole("heading", { name: "每小时Token用量" })).toBeVisible();
+  await expect(trend.getByText("最近 60 分钟", { exact: true })).toHaveCount(0);
+  await expect(trend.getByText("上一小时", { exact: true })).toHaveCount(0);
+  await expect(page.locator("#hourPointInspector")).toHaveCount(0);
+  await expect(page.locator("#hourlyDatePicker")).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
+  await expect(page.locator("#hourlyDateYear")).not.toHaveText("—");
+  await expect(page.locator("#hourlyDateLabel")).not.toHaveText("—");
+  const dateType = await page.locator("#hourlyDateLabel").evaluate((node) => ({
+    year: Number.parseFloat(getComputedStyle(document.querySelector("#hourlyDateYear")).fontSize),
+    date: Number.parseFloat(getComputedStyle(node).fontSize)
+  }));
+  expect(dateType.year).toBeGreaterThanOrEqual(11);
+  expect(dateType.date).toBeGreaterThanOrEqual(16);
+  await expect(page.locator("#hourlyTotal")).toHaveText("60");
+  await expect(page.locator("#hourlyCost")).toHaveText(/^\$/);
+  await expect(page.locator("#hourlyModels").getByText("claude-opus-5-5", { exact: true })).toBeVisible();
+  await expect(page.locator("#hourlyCostCoverage")).toHaveText("100.0%");
+  await expect(page.locator("#hourlyCostNote")).toContainText("Fast");
+  const summaryType = await page.evaluate(() => ({
+    window: Number.parseFloat(getComputedStyle(document.querySelector("#hourlyWindowLabel")).fontSize),
+    ledger: Number.parseFloat(getComputedStyle(document.querySelector("#hourlyInput")).fontSize)
+  }));
+  expect(summaryType.window).toBeGreaterThanOrEqual(15);
+  expect(summaryType.ledger).toBeGreaterThanOrEqual(16);
+  await expect(page.locator("#hourlyLine .hour-line-path")).toHaveCount(1);
+  const hourPoints = page.locator("#hourlyPoints .hour-point");
+  const expectedHours = await page.evaluate(() => new Date().getHours() || 24);
+  await expect(hourPoints).toHaveCount(expectedHours);
+  await expect(hourPoints.last()).toHaveClass(/selected/);
+  await hourPoints.first().focus();
+  await expect(hourPoints.first()).toHaveAttribute("aria-pressed", "true");
+  if (expectedHours > 1) {
+    await expect(page.locator("#hourlyTotal")).toHaveText("0");
+    await expect(page.locator("#hourlyCost")).toHaveText("$0.00");
+    await expect(page.locator("#hourlyModels")).toContainText("没有模型用量");
+  }
+  await hourPoints.first().press("End");
+  await expect(hourPoints.last()).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#hourlyTotal")).toHaveText("60");
+  const alignment = await page.evaluate(() => {
+    const svg = document.querySelector("#hourlyLine");
+    const polyline = svg.querySelector(".hour-line-path");
+    const svgRect = svg.getBoundingClientRect();
+    const coordinates = polyline.getAttribute("points").trim().split(/\s+/).map((pair) => pair.split(",").map(Number));
+    return [...document.querySelectorAll("#hourlyPoints .hour-point")].map((button, index) => {
+      const rect = button.getBoundingClientRect();
+      const [x, y] = coordinates[index];
+      return {
+        x: Math.abs(rect.left + rect.width / 2 - (svgRect.left + x / 1000 * svgRect.width)),
+        y: Math.abs(rect.top + rect.height / 2 - (svgRect.top + y / 180 * svgRect.height))
+      };
+    });
+  });
+  expect(Math.max(...alignment.map(({ x }) => x))).toBeLessThan(0.5);
+  expect(Math.max(...alignment.map(({ y }) => y))).toBeLessThan(0.5);
+  await expect(page.locator("#hourlyWindowLabel")).not.toHaveText("—");
+
+  const initialDate = await page.locator("#hourlyDatePicker").inputValue();
+  await page.locator("#previousHourDay").click();
+  const previousDate = await page.locator("#hourlyDatePicker").inputValue();
+  expect(previousDate).toBe(await page.evaluate((value) => {
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    date.setDate(date.getDate() - 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }, initialDate));
+  await expect(hourPoints).toHaveCount(24);
+  await expect(hourPoints.last()).toHaveClass(/selected/);
+  await expect(page.locator("#currentHourDay")).toBeEnabled();
+  const arbitraryDate = await page.evaluate((value) => {
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    date.setDate(date.getDate() - 8);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  }, initialDate);
+  await page.locator("#hourlyDatePicker").fill(arbitraryDate);
+  await page.locator("#hourlyDatePicker").dispatchEvent("change");
+  await expect(page.locator("#hourlyDatePicker")).toHaveValue(arbitraryDate);
+  await expect(page.locator("#trendHourlyPane")).not.toHaveAttribute("aria-busy", "true");
+  await expect(hourPoints).toHaveCount(24);
+  await page.locator("#currentHourDay").click();
+  await expect(page.locator("#hourlyDatePicker")).toHaveValue(await page.evaluate(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  }));
+  await expect(page.locator("#currentHourDay")).toBeDisabled();
+  expect(hourlyRequests.some((url) => url.searchParams.get("date") === arbitraryDate && url.searchParams.get("complete_hours") === "1")).toBeTruthy();
+  expect(hourlyCostRequests.length).toBeGreaterThan(0);
+});
+
+test("view switching exposes the target panel immediately", async ({ page }) => {
+  await page.goto(dashboardURL, { waitUntil: "networkidle" });
+  const elapsed = await page.evaluate(async () => {
+    const panel = document.querySelector("#view-daily");
+    const start = performance.now();
+    document.querySelector('[data-view="daily"]').click();
+    if (!panel.hidden) return performance.now() - start;
+    await new Promise((resolve) => {
+      const observer = new MutationObserver(() => {
+        if (panel.hidden) return;
+        observer.disconnect();
+        resolve();
+      });
+      observer.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
+    });
+    return performance.now() - start;
+  });
+  expect(elapsed).toBeLessThan(100);
+  await expect(page.locator("#view-daily")).toBeVisible();
+});
+
+test("details renders breakdown before delayed sessions and dimension changes stay local", async ({ page }) => {
+  let sessionRequests = 0;
+  let estimateRequests = 0;
+  await page.route("**/api/v1/sessions?**", async (route) => {
+    sessionRequests++;
+    expect(new URL(route.request().url()).searchParams.get("include_estimate")).toBe("0");
+    await delay(1200);
+    await route.continue();
+  });
+  await page.route("**/api/v1/session-estimates?**", async (route) => {
+    estimateRequests++;
+    await delay(1200);
+    await route.continue();
+  });
+  await page.goto(dashboardURL, { waitUntil: "networkidle" });
+
+  const started = Date.now();
+  await page.getByRole("tab", { name: "明细" }).click();
+  await expect(page.locator("#detailBreakdown .breakdown-row").first()).toBeVisible({ timeout: 1000 });
+  expect(Date.now() - started).toBeLessThan(1100);
+  await expect(page.locator("#sessionRows")).toContainText("正在加载本机 Session");
+  await expect(page.locator("#sessionRows .session-row").first()).toBeVisible({ timeout: 3000 });
+  await expect(page.locator("#sessionRows .session-cost").first()).toHaveClass(/pending/);
+  await expect(page.locator("#sessionRows .session-cost").first()).not.toHaveClass(/pending/, { timeout: 3000 });
+  expect(estimateRequests).toBe(1);
+
+  const requestsBeforeDimensionChange = sessionRequests;
+  const sourceBreakdown = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/v1/breakdown" && url.searchParams.get("dimension") === "source";
+  });
+  await page.getByRole("tab", { name: "来源" }).click();
+  await sourceBreakdown;
+  await expect(page.locator("#breakdownTitle")).toHaveText("按来源");
+  await page.waitForTimeout(100);
+  expect(sessionRequests).toBe(requestsBeforeDimensionChange);
+});
+
+test("details supports today and an arbitrary local date from both date controls", async ({ page }) => {
+  await page.goto(dashboardURL, { waitUntil: "networkidle" });
+  await page.getByRole("tab", { name: "明细" }).click();
+
+  const dates = await page.evaluate(() => {
+    const key = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const today = new Date();
+    const tomorrow = new Date(today);
+    const selected = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    selected.setDate(selected.getDate() - 10);
+    return { today: key(today), tomorrow: key(tomorrow), selected: key(selected) };
+  });
+
+  const todayResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/v1/breakdown" && url.searchParams.get("since") === dates.today && url.searchParams.get("until") === dates.tomorrow;
+  });
+  await page.locator('[data-detail-range="today"]').click();
+  await todayResponse;
+  await expect(page.locator('[data-detail-range="today"]')).toHaveAttribute("aria-pressed", "true");
+
+  const pickerResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/v1/breakdown" && url.searchParams.get("date") === dates.selected;
+  });
+  await page.locator("#detailDatePicker").fill(dates.selected);
+  await page.locator("#detailDatePicker").dispatchEvent("change");
+  const picked = new URL((await pickerResponse).url());
+  expect(picked.searchParams.has("since")).toBeFalsy();
+  expect(picked.searchParams.has("until")).toBeFalsy();
+  await expect(page.locator("#detailDatePicker")).toHaveValue(dates.selected);
+  await expect(page.locator("[data-detail-range][aria-pressed=true]")).toHaveCount(0);
+  await expect(page.locator(".filter-chip")).toContainText("日期 ·");
+
+  await page.locator("#filterButton").click();
+  await expect(page.locator("#filterDate")).toHaveValue(dates.selected);
+  const filterResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/v1/breakdown" && url.searchParams.get("date") === dates.today;
+  });
+  await page.locator("#filterDate").fill(dates.today);
+  await page.locator("#applyFilters").click();
+  await filterResponse;
+  await expect(page.locator("#detailDatePicker")).toHaveValue(dates.today);
+
+  const presetResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/v1/breakdown" && url.searchParams.get("date") === null && url.searchParams.get("since") !== null;
+  });
+  await page.locator('[data-detail-range="7d"]').click();
+  await presetResponse;
+  await expect(page.locator('[data-detail-range="7d"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#detailDatePicker")).toHaveValue("");
+  await expect(page.locator(".filter-chip")).toHaveCount(0);
+});
+
+test("filter dimensions load lazily once instead of running startup breakdowns", async ({ page }) => {
+  const dimensionRequests = [];
+  const startupBreakdowns = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/v1/dimensions") dimensionRequests.push(request.url());
+    if (url.pathname === "/api/v1/breakdown") startupBreakdowns.push(request.url());
+  });
+  await page.goto(dashboardURL, { waitUntil: "networkidle" });
+  expect(dimensionRequests).toHaveLength(0);
+  expect(startupBreakdowns).toHaveLength(0);
+
+  await page.locator("#filterButton").click();
+  await expect.poll(() => dimensionRequests.length).toBe(1);
+  await expect(page.locator("#filterModel option")).toHaveCount(2);
+  await page.locator("#filterSheet [data-close]").click();
+  await page.locator("#filterButton").click();
+  await page.waitForTimeout(100);
+  expect(dimensionRequests).toHaveLength(1);
+});
+
+test("display settings improve the default scale and persist font, density, theme, and motion", async ({ page }) => {
+  await page.goto(dashboardURL, { waitUntil: "networkidle" });
+
+  await expect(page.locator("html")).toHaveAttribute("data-font-size", "comfortable");
+  await expect(page.locator("html")).toHaveAttribute("data-density", "balanced");
+  await page.locator("#settingsButton").click();
+  await expect(page.getByRole("heading", { name: "显示设置" })).toBeVisible();
+  await expect(page.locator('input[name="fontSize"][value="comfortable"]')).toBeChecked();
+  await expect(page.locator('input[name="density"][value="balanced"]')).toBeChecked();
+
+  await page.locator('input[name="fontSize"][value="large"]').check({ force: true });
+  await page.locator('input[name="density"][value="compact"]').check({ force: true });
+  await page.locator('input[name="theme"][value="dark"]').check({ force: true });
+  await page.locator('input[name="motion"][value="reduce"]').check({ force: true });
+  await expect(page.locator("html")).toHaveAttribute("data-font-size", "large");
+  await expect(page.locator("html")).toHaveAttribute("data-density", "compact");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("html")).toHaveAttribute("data-motion", "reduce");
+  expect(await page.evaluate(() => getComputedStyle(document.body).fontSize)).toBe("16.875px");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("claude-usage-display-preferences")))).toEqual({
+    fontSize: "large",
+    density: "compact",
+    theme: "dark",
+    motion: "reduce"
+  });
+
+  await page.locator("#settingsDialog [data-close]").first().click();
+  await page.reload({ waitUntil: "networkidle" });
+  await expect(page.locator("html")).toHaveAttribute("data-font-size", "large");
+  await expect(page.locator("html")).toHaveAttribute("data-density", "compact");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("html")).toHaveAttribute("data-motion", "reduce");
+
+  await page.locator("#settingsButton").click();
+  await page.locator("#resetSettings").click();
+  await expect(page.locator("html")).toHaveAttribute("data-font-size", "comfortable");
+  await expect(page.locator("html")).toHaveAttribute("data-density", "balanced");
+  expect(await page.evaluate(() => ({
+    theme: document.documentElement.getAttribute("data-theme"),
+    motion: document.documentElement.getAttribute("data-motion"),
+    saved: localStorage.getItem("claude-usage-display-preferences")
+  }))).toEqual({ theme: null, motion: null, saved: null });
+});
+
+test("navigation, month drill-down, filter chips, pricing, and scan feedback work", async ({ page }) => {
+  await page.goto(dashboardURL, { waitUntil: "networkidle" });
+
+  const dailyTab = page.locator(".primary-nav").getByRole("tab", { name: "每日" });
+  await dailyTab.focus();
+  await dailyTab.press("Enter");
+  await expect(page.getByRole("heading", { name: "每日用量" })).toBeVisible();
+  const initialMonth = await page.locator("#monthLabel").textContent();
+  await page.locator("#previousMonth").click();
+  await expect(page.locator("#monthLabel")).not.toHaveText(initialMonth);
+  await expect(page.locator("[data-calendar-date]").first()).toBeVisible();
+
+  const directDate = "2025-04-17";
+  await page.locator("#dailyDatePicker").fill(directDate);
+  await page.locator("#dailyDatePicker").dispatchEvent("change");
+  await expect(page.locator("#dailyDatePicker")).toHaveValue(directDate);
+  await expect(page.locator("#dailyDateYear")).toContainText("2025");
+  await expect(page.locator("#dailyDateLabel")).toContainText("4月17日");
+  await expect(page.locator(`[data-calendar-date="${directDate}"]`)).toHaveClass(/selected/);
+  await expect(page.locator("#selectedDateTitle")).toContainText("4月17日");
+
+  await page.getByRole("tab", { name: "明细" }).click();
+  await expect(page.getByRole("heading", { name: "明细与归属" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Session 明细" })).toBeVisible();
+  await expect(page.getByText("等价 API 价格", { exact: true })).toBeVisible();
+  await expect(page.locator(".session-cost").first()).not.toHaveClass(/pending/);
+  await expect(page.locator(".session-cost strong").first()).toHaveText(/^\$/);
+
+  const modelDrill = page.locator('[data-drill-value="claude-opus-5-5"]');
+  await modelDrill.click();
+  await expect(page.locator('[data-drill-value="claude-opus-5-5"]')).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".filter-chip")).toContainText("模型 · claude-opus-5-5");
+  await page.locator('[data-drill-value="claude-opus-5-5"]').click();
+  await expect(page.locator(".filter-chip")).toHaveCount(0);
+
+  await page.locator("#sessionSearch").fill("claude-usage-e2e");
+  await expect(page.locator(".session-row")).toHaveCount(1);
+  await page.locator("#sessionSearch").fill("no-such-session");
+  await expect(page.getByText("没有匹配的 Session")).toBeVisible();
+  await page.locator("#sessionSearchClear").click();
+  await expect(page.locator(".session-row")).toHaveCount(1);
+
+  await page.locator(".session-filter").click();
+  await expect(page.locator(".filter-chip")).toContainText("Session · e2e-session");
+  await expect(page.locator(".session-filter")).toHaveText("取消");
+  await page.locator(".session-filter").click();
+  await expect(page.locator(".filter-chip")).toHaveCount(0);
+
+  await page.getByRole("tab", { name: "项目" }).click();
+  await expect(page.getByRole("heading", { name: "按项目" })).toBeVisible();
+
+  await page.locator("#filterButton").click();
+  await expect(page.locator("#filterSheet")).toBeVisible();
+  await page.locator("#filterAgent").selectOption("main");
+  await page.locator("#applyFilters").click();
+  await expect(page.locator(".filter-chip")).toContainText("Agent · main");
+  await page.locator("[data-remove-filter=agent_type]").click();
+  await expect(page.locator(".filter-chip")).toHaveCount(0);
+
+  await page.getByRole("tab", { name: "概览" }).click();
+  await page.locator("#pricingButton").click();
+  await page.locator("#newOverrideModel").fill("e2e-internal-model");
+  await page.locator("#addOverride").click();
+  const card = page.locator('[data-pricing-model="e2e-internal-model"]');
+  await card.locator("[data-rate-mode]").selectOption("custom");
+  await card.locator('[data-rate="input_usd_per_million"]').fill("1.00");
+  await card.locator('[data-rate="cached_input_usd_per_million"]').fill("0.10");
+  await card.locator('[data-rate="cache_write_input_usd_per_million"]').fill("1.25");
+  await card.locator('[data-rate="cache_write_1h_usd_per_million"]').fill("2.00");
+  await card.locator('[data-rate="output_usd_per_million"]').fill("6.00");
+  await page.locator("#savePricing").click();
+  await expect(page.getByText("本机定价已保存，费用已重新估算")).toBeVisible();
+  await expect.poll(async () => {
+    const response = await page.request.get(`${baseURL}/api/v1/pricing`);
+    return (await response.json()).overrides["e2e-internal-model"]?.output_usd_per_million;
+  }).toBe("6.00");
+
+  await page.locator("#scanButton").click();
+  await expect(page.getByText(/扫描完成：新增/)).toBeVisible();
+});
+
+test("revisiting a range or view reuses the current data revision", async ({ page }) => {
+  const dataRequests = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (["/api/v1/cost-estimate", "/api/v1/breakdown", "/api/v1/sessions"].includes(url.pathname)) {
+      dataRequests.push(`${url.pathname}?${url.searchParams.toString()}`);
+    }
+  });
+  await page.goto(dashboardURL, { waitUntil: "networkidle" });
+
+  await page.locator('[data-overview-range="all"]').click();
+  await expect(page.locator("#overviewCost")).not.toHaveClass(/loading/);
+  const allCostKey = "/api/v1/cost-estimate?bucket=day&cost_basis=claude_fast_weighted";
+  const firstAllCount = dataRequests.filter((item) => item === allCostKey).length;
+  expect(firstAllCount).toBe(1);
+
+  await page.locator('[data-overview-range="30d"]').click();
+  await expect(page.locator("#overviewCost")).not.toHaveClass(/loading/);
+  await page.locator('[data-overview-range="all"]').click();
+  await expect(page.locator("#overviewCost")).not.toHaveClass(/loading/);
+  await page.waitForTimeout(100);
+  expect(dataRequests.filter((item) => item === allCostKey).length).toBe(firstAllCount);
+
+  await page.locator(".primary-nav").getByRole("tab", { name: "每日" }).click();
+  await expect(page.getByRole("heading", { name: "每日用量" })).toBeVisible();
+  const monthCostKey = dataRequests.find((item) => item.startsWith("/api/v1/cost-estimate?since=") && item.includes("&bucket=day"));
+  expect(monthCostKey).toBeTruthy();
+  const firstMonthCount = dataRequests.filter((item) => item === monthCostKey).length;
+  await page.getByRole("tab", { name: "明细" }).click();
+  await expect(page.getByRole("heading", { name: "明细与归属" })).toBeVisible();
+  await page.locator(".primary-nav").getByRole("tab", { name: "每日" }).click();
+  await expect(page.getByRole("heading", { name: "每日用量" })).toBeVisible();
+  await page.waitForTimeout(100);
+  expect(dataRequests.filter((item) => item === monthCostKey).length).toBe(firstMonthCount);
+});
+
+test("historical rebuild requires explicit dashboard approval", async ({ page }) => {
+  const requests = [];
+  await page.route("**/api/v1/rescan", async (route) => {
+    const payload = route.request().postDataJSON();
+    requests.push(payload);
+    if (!payload.rebuild) {
+      await route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: "现有统计已保留，需要用户确认后才能重建",
+          rebuild_required: true,
+          kind: "rollout_truncated",
+          detail: "文件从 1024 缩短到 512"
+        })
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ homes: 1, files: 1, events_inserted: 1, duplicates: 0, warnings: 0 })
+    });
+  });
+  await page.goto(dashboardURL);
+
+  await page.locator("#scanButton").click();
+  await expect(page.locator("#rebuildDialog")).toBeVisible();
+  await expect(page.locator("#rebuildDetail")).toHaveText("文件从 1024 缩短到 512");
+  await page.getByRole("button", { name: "保留现有统计" }).click();
+  await expect(page.locator("#rebuildDialog")).toBeHidden();
+  expect(requests).toEqual([{ rebuild: false }]);
+
+  await page.locator("#scanButton").click();
+  await page.locator("#confirmRebuild").click();
+  await expect(page.getByText(/扫描完成：新增/)).toBeVisible();
+  expect(requests).toEqual([{ rebuild: false }, { rebuild: false }, { rebuild: true }]);
+});
+
+test("mobile, tablet, themes, and reduced motion avoid page overflow", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(dashboardURL, { waitUntil: "networkidle" });
+  await page.locator("#usageTrendPanel").getByRole("tab", { name: "每小时" }).click();
+  await expect(page.locator("#hourlyPoints .hour-point")).toHaveCount(await page.evaluate(() => new Date().getHours() || 24));
+  await expect.poll(() => page.locator(".hourly-chart-scroll").evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);
+  await page.getByRole("tab", { name: "明细" }).click();
+  await expect(page.getByRole("heading", { name: "Session 明细" })).toBeVisible();
+  await expect(page.locator("#sessionRows .session-row").first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await expect(page.locator("#exportButton")).toBeVisible();
+  await expect(page.locator("#settingsButton")).toBeVisible();
+  await page.locator("#settingsButton").click();
+  await expect(page.locator(".settings-group")).toHaveCount(5);
+  expect(await page.locator("#settingsDialog .dialog-frame").evaluate((dialog) => dialog.scrollWidth <= dialog.clientWidth)).toBe(true);
+  await page.locator("#settingsDialog [data-close]").first().click();
+  await expect(page.locator("#settingsDialog")).toBeHidden();
+
+  await page.setViewportSize({ width: 1024, height: 900 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1024);
+  await page.getByRole("tab", { name: "概览" }).click();
+  await page.locator("#themeButton").click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", /light|dark/);
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const duration = await page.locator(".pressable").first().evaluate((node) => parseFloat(getComputedStyle(node).transitionDuration));
+  expect(duration).toBeLessThanOrEqual(.001);
+});
+
+test("mutation endpoints require the same loopback origin", async ({ request }) => {
+  for (const [method, endpoint, data] of [
+    ["post", "/api/v1/rescan", {}],
+    ["put", "/api/v1/pricing/overrides", { overrides: {} }]
+  ]) {
+    const response = await request[method](`${baseURL}${endpoint}`, {
+      headers: { Origin: "https://example.invalid" },
+      data
+    });
+    expect(response.status()).toBe(403);
+  }
+  const otherLoopbackPort = await request.post(`${baseURL}/api/v1/rescan`, {
+    headers: { Origin: `${baseURL.slice(0, baseURL.lastIndexOf(":"))}:49999` },
+    data: {}
+  });
+  expect(otherLoopbackPort.status()).toBe(403);
+  const crossSiteWithoutOrigin = await request.post(`${baseURL}/api/v1/rescan`, {
+    headers: { "Sec-Fetch-Site": "cross-site" },
+    data: {}
+  });
+  expect(crossSiteWithoutOrigin.status()).toBe(403);
+});
+
+test("localization catalogs, precedence, persistence, dates, numbers, and ARIA stay aligned", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("claude-usage-locale", "zh-CN"));
+  await page.goto(`${baseURL}/?lang=en`, { waitUntil: "networkidle" });
+
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.getByRole("heading", { name: "Per-machine usage overview" })).toBeVisible();
+  await expect(page.locator("#machinePill")).toHaveAttribute("aria-label", /Current machine:/);
+  await expect(page.locator("#overviewSubtitle")).toHaveText("Past 7 local calendar days");
+  await expect(page.locator("#overviewTotal")).toContainText(/\d/);
+  await expect(page.locator("#exportButton")).toHaveAttribute("aria-controls", "exportDialog");
+  await expect(page.locator("#pricingButton")).toHaveAttribute("aria-controls", "pricingDialog");
+  await expect(page.locator("#warningButton")).toHaveAttribute("aria-controls", "warningsDialog");
+  const catalogs = await page.evaluate(() => {
+    const values = window.ClaudeUsageI18n.catalogs;
+    const zh = Object.keys(values["zh-CN"]).sort();
+    const en = Object.keys(values.en).sort();
+    return { equal: JSON.stringify(zh) === JSON.stringify(en), count: zh.length };
+  });
+  expect(catalogs.equal).toBe(true);
+  expect(catalogs.count).toBeGreaterThan(150);
+  for (const leaked of ["本机用量概览", "当前筛选", "定价设置", "数据来源与归属"]) {
+    await expect(page.getByText(leaked, { exact: true })).toHaveCount(0);
+  }
+
+  await page.locator(".primary-nav").getByRole("tab", { name: "Daily" }).click();
+  await expect(page.locator("#monthLabel")).toContainText(/[A-Za-z]/);
+  await page.locator("#localeButton").click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
+  await expect(page.getByRole("heading", { name: "每日用量" })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("claude-usage-locale"))).toBe("zh-CN");
+  expect(new URL(page.url()).searchParams.get("lang")).toBe("zh-CN");
+});
+
+
+test("Fast tokens, mode filters, weighted costs and responsive presentation agree", async ({page}, testInfo) => {
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.setViewportSize({width:1440,height:1100});
+  await page.goto(dashboardURL, {waitUntil:"networkidle"});
+  await expect(page.locator("#overviewTotal")).toHaveText("160");
+  await expect(page.locator("#overviewTokenModes")).toHaveText(/100.*Fast 60/);
+  await expect(page.locator("#overviewUnknown, .mode-unknown, .mode-cost-details")).toHaveCount(0);
+  await expect(page.locator("#overviewCostNote")).toContainText("2026");
+  const report = await (await page.request.get(`${baseURL}/api/v1/cost-estimate?cost_basis=claude_fast_weighted`)).json();
+  expect(Number(report.summary.fast_mode_usd)).toBeCloseTo(.00112,9);
+  expect(Number(report.summary.regular_mode_usd)).toBeCloseTo(.000644,9);
+  expect(report.modes.regular.total+report.modes.fast.total).toBe(160);
+  await page.screenshot({path:testInfo.outputPath("fast-desktop.png"),fullPage:true});
+  await page.evaluate(() => document.documentElement.dataset.theme="dark");
+  await page.screenshot({path:testInfo.outputPath("fast-dark.png"),fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  await page.screenshot({path:testInfo.outputPath("fast-mobile.png"),fullPage:true});
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.setViewportSize({width:1440,height:1100});
+  await page.locator('.primary-nav [data-view="details"]').click();
+  await expect(page.locator("#sessionRows .mode-fast").first()).toContainText("60");
+  await expect(page.locator("#sessionRows .session-token > strong").first()).toHaveText("160");
+  await expect(page.locator("#detailBreakdown .breakdown-value").first()).toHaveText(/160.*Fast 60/);
+  await page.screenshot({path:testInfo.outputPath("fast-details.png"),fullPage:true});
+  await page.locator('.primary-nav [data-view="daily"]').click();
+  await expect(page.locator("#dayModes")).toContainText("60");
+  await page.screenshot({path:testInfo.outputPath("fast-calendar.png"),fullPage:true});
+  await page.locator('.primary-nav [data-view="overview"]').click();
+  await page.locator("#filterButton").click();
+  await page.locator("#filterMode").selectOption("regular");
+  await page.locator("#applyFilters").click();
+  await expect(page.locator("#overviewTotal")).toHaveText("100");
+  await expect(page.locator("#overviewTokenModes")).toHaveText(/100.*Fast 0/);
+  expect((await (await page.request.get(`${baseURL}/api/v1/export?mode=fast`)).json()).every(row=>row.service_mode==="fast"&&!row.mode_assumed)).toBeTruthy();
+  expect(errors).toEqual([]);
+});
+
+
+test("remote browser uses the ledger timezone and keeps hourly usage", async ({ browser }) => {
+  const context = await browser.newContext({ timezoneId: "Pacific/Honolulu" });
+  const page = await context.newPage();
+  try {
+    await page.goto(dashboardURL, {waitUntil:"networkidle"});
+    await page.locator("#usageTrendPanel").getByRole("tab",{name:"每小时"}).click();
+    await expect(page.locator("#hourlyTotal")).toHaveText("60");
+    const status = await (await page.request.get(`${baseURL}/api/v1/status`)).json();
+    await expect(page.locator("#measurementTimezone")).toContainText(status.status.accounting_timezone);
+    const series = await (await page.request.get(`${baseURL}/api/v1/timeseries?date=${await page.locator("#hourlyDatePicker").inputValue()}&bucket=hour&complete_hours=1`)).json();
+    expect(series.points.reduce((sum,p)=>sum+p.usage.total,0)).toBe(60);
+    await expect(page.locator("#hourlyPoints .hour-point")).toHaveCount(series.window.complete_hours);
+    expect(new Set(series.points.map(p=>p.time)).size).toBe(series.points.length);
+  } finally { await context.close(); }
+});
+
+test("custom minute range queries real event totals, validates bounds, and uses the ledger timezone for Now", async ({ browser }, testInfo) => {
+  const context = await browser.newContext({ timezoneId: "Pacific/Honolulu", viewport: { width: 1440, height: 1000 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    await page.goto(dashboardURL, { waitUntil: "networkidle" });
+    const status = await (await page.request.get(`${baseURL}/api/v1/status`)).json();
+    const all = await (await page.request.get(`${baseURL}/api/v1/summary`)).json();
+    const zone = status.status.accounting_timezone;
+    const minute = (date) => {
+      const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+        timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23"
+      }).formatToParts(date).map((part) => [part.type, part.value]));
+      return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+    };
+    const start = minute(new Date(all.first_event));
+    const end = minute(new Date(new Date(all.first_event).getTime() + 60_000));
+    await page.locator('[data-overview-range="custom"]').click();
+    await expect(page.locator("#customRangeForm")).toBeVisible();
+    await expect(page.locator("#customRangeHint")).toContainText(zone);
+    await page.getByLabel("开始时间", { exact: true }).fill(start);
+    await page.getByLabel("结束时间", { exact: true }).fill(end);
+    const result = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === "/api/v1/summary" && url.searchParams.get("since") === start && url.searchParams.get("until") === end;
+    });
+    await page.getByRole("button", { name: "查询用量", exact: true }).click();
+    expect((await (await result).json()).grand_total).toBe(60);
+    await expect(page.locator("#overviewTotal")).toHaveText("60");
+    await expect(page.locator("#overviewExactTotal")).toHaveText("精确总量：60 Token");
+    await expect(page.locator("#overviewTokenBreakdown")).toContainText("Input (total)48");
+    await expect(page.locator("#overviewCoverage")).toContainText("已定价 100.0% Token");
+    await expect(page.locator("#queryRange")).toBeEnabled();
+    const appliedSubtitle = await page.locator("#overviewSubtitle").textContent();
+
+    await page.locator("#rangeEnd").fill(start);
+    await expect(page.locator("#customRangeStatus")).toContainText("时间已修改");
+    await page.locator("#queryRange").click();
+    await expect(page.locator("#customRangeError")).toHaveText("结束时间必须晚于开始时间。");
+    await expect(page.locator("#overviewSubtitle")).toHaveText(appliedSubtitle);
+    await expect(page.locator("#overviewTotal")).toHaveText("60");
+    await page.locator("#rangeEnd").fill(minute(new Date(new Date(all.first_event).getTime() - 60_000)));
+    await page.locator("#queryRange").click();
+    await expect(page.locator("#customRangeError")).toHaveText("结束时间必须晚于开始时间。");
+    await page.locator("#rangeStart").fill("");
+    await page.locator("#queryRange").click();
+    expect(await page.locator("#rangeStart").evaluate((el) => el.validity.valueMissing)).toBe(true);
+
+    // A fixed instant close to midnight catches browser-local conversion and
+    // 12-hour clock mistakes without freezing timers used by the dashboard.
+    const fixedNow = new Date("2026-09-16T16:00:39Z");
+    await page.clock.setFixedTime(fixedNow);
+    await page.locator("#rangeNow").click();
+    await expect(page.locator("#rangeEnd")).toHaveValue(minute(fixedNow));
+    await expect(page.locator("#overviewSubtitle")).toHaveText(appliedSubtitle);
+    await page.locator("#rangeStart").fill(start);
+    await page.locator("#rangeEnd").fill(end);
+    await page.locator("#queryRange").click();
+    await expect(page.locator("#queryRange")).toBeEnabled();
+    await page.screenshot({ path: testInfo.outputPath("custom-range-desktop.png"), animations: "disabled" });
+
+    // The custom bounds survive navigation and preset changes; a preset must
+    // stop sending the minute filter and include all events in the session.
+    await page.locator('[data-overview-range="all"]').click();
+    await expect(page.locator("#customRangeForm")).toBeHidden();
+    await expect(page.locator("#overviewTotal")).toHaveText(String(all.grand_total));
+    await page.locator('[data-overview-range="custom"]').click();
+    await expect(page.locator("#rangeStart")).toHaveValue(start);
+    await expect(page.locator("#overviewTotal")).toHaveText("60");
+    await page.locator("#localeButton").click();
+    await expect(page.locator("#rangeNow")).toHaveText("Now");
+    await expect(page.locator("#queryRange")).toHaveText("Query usage");
+    await expect(page.locator("#overviewExactTotal")).toHaveText("Exact total: 60 tokens");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => document.documentElement.dataset.theme = "dark");
+    expect(await page.locator("#customRangeForm").evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    await page.screenshot({ path: testInfo.outputPath("custom-range-mobile.png"), animations: "disabled" });
+    // Wider fallback fonts must not push the English header beyond the viewport.
+    await page.addStyleTag({ content: ":root { --body: Verdana, sans-serif; --display: Verdana, sans-serif; }" });
+    const fallbackLayout = await page.evaluate(() => ({
+      width: document.documentElement.scrollWidth,
+      overflow: [...document.querySelectorAll("body *")].filter((el) => el.getBoundingClientRect().right > innerWidth && el.getBoundingClientRect().width > 0)
+        .map((el) => ({ tag: el.tagName, id: el.id, class: el.className, right: el.getBoundingClientRect().right })).slice(0, 20)
+    }));
+    expect(fallbackLayout.width, JSON.stringify(fallbackLayout.overflow)).toBeLessThanOrEqual(390);
+
+    await page.locator("#rangeStart").fill("2000-01-01T00:00");
+    await page.locator("#rangeEnd").fill("2000-01-01T00:01");
+    await page.locator("#queryRange").click();
+    await expect(page.locator("#overviewExactTotal")).toHaveText("Exact total: 0 tokens");
+    await expect(page.locator("#queryRange")).toBeEnabled();
+    await expect(page.locator("#customRangeError")).toBeHidden();
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
+
+test("Claude Opus models and cache lifetimes price recorded usage and appear in the catalog", async ({ page }, testInfo) => {
+  const cases = [
+    { model: "claude-opus-5-5", recorded: "claude-opus-5-5-20260922", display: "Claude Opus 5.5", rates: ["4", "0.2", "5", "8", "20"], standard: "0.005340000", fast: "0.010680000" },
+    { model: "claude-opus-5", recorded: "claude-opus-5-20260922", display: "Claude Opus 5", rates: ["5", "0.5", "6.25", "10", "25"], standard: "0.006725000", fast: "0.013450000" }
+  ];
+  const timestamp = new Date().toISOString();
+  const usage = { input_tokens: 700, cache_read_input_tokens: 200, cache_creation_input_tokens: 100, cache_creation:{ephemeral_5m_input_tokens:100}, output_tokens: 100, output_tokens_details:{thinking_tokens:50}, speed:"fast" };
+  for (const item of cases) {
+    const id = `e2e-${item.model}`;
+    const fixture = {type:"assistant", timestamp, sessionId:id, requestId:"req-"+id, cwd:"synthetic://claude-pricing", message:{id:"msg-"+id, model:item.recorded, stop_reason:"end_turn", usage}};
+    await writeFile(path.join(claudeHomeDir, "projects", "demo", `${id}.jsonl`), JSON.stringify(fixture)+"\n");
+  }
+  const scan = await page.request.post(`${baseURL}/api/v1/rescan`, { data: {}, headers: { Origin: baseURL } });
+  expect(scan.ok()).toBeTruthy();
+  const get = async (url) => {
+    const response = await page.request.get(`${baseURL}/api/v1/${url}`);
+    expect(response.ok()).toBeTruthy();
+    return response.json();
+  };
+  const catalog = await get("pricing");
+  for (const item of cases) {
+    expect(catalog.unpriced_models.map((row) => row.key)).not.toContain(item.recorded);
+    const summary = await get(`summary?model=${item.recorded}`);
+    expect(summary.grand_total).toBe(1100);
+    expect(summary.modes.fast.total).toBe(1100);
+    const standard = await get(`cost-estimate?model=${item.recorded}`);
+    const fast = await get(`cost-estimate?model=${item.recorded}&cost_basis=claude_fast_weighted`);
+    expect(standard.summary.usd).toBe(item.standard);
+    expect(fast.summary.usd).toBe(item.fast);
+    expect(fast.summary.standard_base_usd).toBe(item.standard);
+    expect(fast.summary.coverage_ratio).toBe(1);
+    expect(fast.summary.unpriced_tokens).toBe(0);
+    const sessions = await get(`session-estimates?model=${item.recorded}&cost_basis=claude_fast_weighted`);
+    expect(sessions.items).toHaveLength(1);
+    expect(sessions.items[0].estimate.usd).toBe(item.fast);
+  }
+
+  await page.goto(dashboardURL, { waitUntil: "networkidle" });
+  await page.locator("#pricingButton").click();
+  await page.locator(".catalog-disclosure summary").click();
+  await page.locator("#newOverrideModel").fill("claude-e2e-alias");
+  await page.locator("#addOverride").click();
+  const card = page.locator('[data-pricing-model="claude-e2e-alias"]');
+  await card.locator("[data-rate-mode]").selectOption("alias");
+  for (const item of cases) {
+    const row = page.locator("#pricingCatalog .catalog-row").filter({ has: page.getByRole("link", { name: item.display, exact: true }) });
+    await expect(row.locator("span")).toHaveText(item.rates);
+    await card.locator("[data-alias]").selectOption(item.model);
+    await expect(card.locator("[data-alias]")).toHaveValue(item.model);
+  }
+  await page.screenshot({ path: testInfo.outputPath("claude-pricing-catalog.png") });
+});
+
+test("source settings, mirrored source union and exports remain consistent", async ({ page }, testInfo) => {
+  const mirror = await mkdtemp(path.join(tmpdir(), "claude-usage-mirror-"));
+  const endpoint = `${baseURL}/api/v1/sources`;
+  const original = await (await page.request.get(endpoint)).json();
+  const before = await (await page.request.get(`${baseURL}/api/v1/summary`)).json();
+  try {
+    await cp(path.join(claudeHomeDir, "projects"), path.join(mirror, "projects"), { recursive: true });
+    await page.goto(dashboardURL, { waitUntil: "networkidle" });
+    await page.locator("#sourcesButton").click();
+    await expect(page.locator("#sourceList .source-row")).toHaveCount(1);
+    await page.locator("#sourcePaths").fill(mirror);
+    await expect(page.locator("#discoverWSL")).not.toBeChecked();
+    await page.locator("#saveSources").click();
+    await expect(page.locator("#sourcesDialog")).toBeHidden();
+    await expect(page.getByText(/扫描完成/)).toBeVisible();
+    await page.locator("#sourcesButton").click();
+    await expect(page.locator("#sourcePaths")).toHaveValue(mirror);
+    await expect(page.locator("#sourceList .source-row")).toHaveCount(2);
+    await page.screenshot({ path: testInfo.outputPath("source-settings.png") });
+    await page.keyboard.press("Escape");
+    await page.locator("#filterButton").click();
+    await expect(page.locator("#filterHomes option")).toHaveCount(2);
+    await page.locator("#filterHomes").selectOption([claudeHomeDir, mirror]);
+    await page.locator("#applyFilters").click();
+    await expect(page.locator(".filter-chip")).toContainText("日志目录");
+    await expect(page.locator("#overviewExactTotal")).toContainText(before.grand_total.toLocaleString("zh-CN"));
+    const query = [claudeHomeDir,mirror].map(h=>`home=${encodeURIComponent(h)}`).join("&");
+    const union = await (await page.request.get(`${baseURL}/api/v1/summary?${query}`)).json();
+    expect(union.usage).toEqual(before.usage);
+    const rows = await (await page.request.get(`${baseURL}/api/v1/export?${query}`)).json();
+    expect(rows.reduce((sum,row)=>sum+row.usage.total,0)).toBe(union.grand_total);
+    expect(rows.every(row=>row.sources.length===2)).toBeTruthy();
+    const csv = await (await page.request.get(`${baseURL}/api/v1/export?format=csv&${query}`)).text();
+    expect(csv.split("\n")[0]).toContain("cache_write_5m,cache_write_1h,cache_write_unknown,sources,iteration_type");
+    const invalid = await page.request.put(endpoint,{headers:{Origin:"https://example.invalid"},data:{}});
+    expect(invalid.status()).toBe(403);
+    await page.setViewportSize({width:390,height:844});
+    await page.emulateMedia({colorScheme:"dark",reducedMotion:"reduce"});
+    await page.locator("#sourcesButton").click();
+    await page.screenshot({path:testInfo.outputPath("source-settings-mobile.png")});
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  } finally {
+    await page.request.put(endpoint,{data:{extra_claude_homes:original.extra_claude_homes || [],auto_discover_wsl:original.auto_discover_wsl,auto_start_wsl:original.auto_start_wsl}});
+    await rm(mirror,{recursive:true,force:true});
+  }
+});
