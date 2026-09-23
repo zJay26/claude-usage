@@ -1,4 +1,4 @@
-import { chromium } from '@playwright/test';
+import { chromium, expect } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
@@ -24,6 +24,8 @@ try {
   await page.locator('.primary-nav [data-view="overview"]').click();
   await page.locator('#sourcesButton').click();
   await page.locator('#sourceList .source-row').first().waitFor();
+  await expect(page.locator('#sourcesDialog')).toHaveClass(/is-open/);
+  await expect(page.locator('#sourcesDialog')).toHaveCSS('opacity', '1');
   await page.screenshot({path:path.join(destination,'sources.png')});
   await page.keyboard.press('Escape');
   await page.goto('http://127.0.0.1:43219/claude-usage/?lang=en', {waitUntil:'networkidle'});

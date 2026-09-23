@@ -184,6 +184,27 @@ func TestLateRequestIDBridgesTwoMessages(t *testing.T) {
 	}
 }
 
+func TestRewriteDoesNotBlockHealthySource(t *testing.T) {
+	s, st, home := openTest(t)
+	other := filepath.Join(t.TempDir(), "other")
+	broken := appendRecords(t, home, "a.jsonl", message("a", counters(2, 0, 0, 3)))
+	scan(t, s, home)
+	if err := os.WriteFile(broken, []byte{}, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"b", "c"} {
+		appendRecords(t, other, "b.jsonl", message(id, counters(2, 0, 0, 3)))
+		_, err := s.Scan(context.Background(), []string{home, other}, false)
+		var rebuild *RebuildRequiredError
+		if !errors.As(err, &rebuild) {
+			t.Fatal(err)
+		}
+	}
+	if got := total(t, st).Usage.Total; got != 15 {
+		t.Fatalf("healthy root stalled: %d", got)
+	}
+}
+
 func TestIncompleteTailAndLargeContent(t *testing.T) {
 	s, st, home := openTest(t)
 	r := message("large", counters(3, 4, 5, 6))

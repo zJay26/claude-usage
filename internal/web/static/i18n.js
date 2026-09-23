@@ -636,7 +636,7 @@
       "provenance.lastScan": "Last scan",
       "provenance.source": "Accounting source",
       "provenance.stateRole": "Deduplication",
-      "provenance.metadataOnly": "Discovery and metadata only",
+      "provenance.metadataOnly": "One request across all sources",
       "provenance.stateRoleHint": "Mirrors and content blocks count once",
       "daily.title": "Daily usage",
       "daily.subtitle": "Browse local calendar days and select a date to drill down",

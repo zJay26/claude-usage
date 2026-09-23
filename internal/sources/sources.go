@@ -38,7 +38,7 @@ func Snapshot() []Source {
 }
 
 // A failed root is retried on the next scan without dropping its history.
-func RecordResult(path string, err error) {
+func RecordResult(path string, err error, files ...int64) {
 	cache.Lock()
 	defer cache.Unlock()
 	for i := range cache.entries {
@@ -50,6 +50,9 @@ func RecordResult(path string, err error) {
 			entry.State, entry.Error = "error", err.Error()
 		} else {
 			entry.State, entry.Error = "ready", ""
+			if len(files) > 0 && files[0] == 0 {
+				entry.State = "empty"
+			}
 		}
 	}
 }

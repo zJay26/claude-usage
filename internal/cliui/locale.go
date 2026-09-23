@@ -99,6 +99,7 @@ Usage:
   claude-usage config add-home PATH    Add another CLAUDE_CONFIG_DIR
   claude-usage uninstall [--purge]     Uninstall; keep the usage database by default
   claude-usage serve                   Run the local service in the foreground
+  claude-usage update check|install    Check or explicitly install an update
   claude-usage version                 Print the version
 
 Language:

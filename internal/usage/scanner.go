@@ -75,16 +75,18 @@ func (s *Scanner) Scan(ctx context.Context, homes []string, rebuild bool) (resul
 		s.MaxRelevantRecord = 8 << 20
 	}
 	result.Homes = len(homes)
+	var firstErr error
 	if rebuild {
 		if err = s.Store.ResetHistorical(ctx); err != nil {
 			return
 		}
 	} else if why, required, e := s.Store.HistoricalRebuildReason(ctx); e != nil {
 		return result, e
-	} else if required {
-		return result, &RebuildRequiredError{Kind: "historical_rebuild_required", Detail: why}
+	} else if required && os.Getenv("CLAUDE_USAGE_SCAN_WORKER") == "" {
+		// Keep reporting pending approval while independent healthy files can
+		// still append usage. Never discard history to recover one broken root.
+		firstErr = &RebuildRequiredError{Kind: "historical_rebuild_required", Detail: why}
 	}
-	var firstErr error
 	seen := map[string]bool{}
 	for _, raw := range homes {
 		if err = ctx.Err(); err != nil {
@@ -97,7 +99,7 @@ func (s *Scanner) Scan(ctx context.Context, homes []string, rebuild bool) (resul
 		}
 		if sources.IsWSLPath(home) && os.Getenv("CLAUDE_USAGE_SCAN_WORKER") == "" {
 			part, e := s.scanWorker(ctx, home)
-			sources.RecordResult(home, e)
+			sources.RecordResult(home, e, part.Files)
 			result.Files += part.Files
 			result.Records += part.Records
 			result.EventsInserted += part.EventsInserted
@@ -152,7 +154,7 @@ func (s *Scanner) Scan(ctx context.Context, homes []string, rebuild bool) (resul
 		if d.Warning != "" {
 			result.Warnings++
 		}
-		sources.RecordResult(home, sourceErr)
+		sources.RecordResult(home, sourceErr, count)
 		warning := ""
 		if sourceErr != nil {
 			warning = sourceErr.Error()
