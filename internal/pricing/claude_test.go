@@ -61,3 +61,22 @@ func TestCustomPricesRequireBothTTLs(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+func TestCurrentLongContextAndFastRulesDoNotGuessLegacyPrices(t *testing.T) {
+	for _, tc := range []struct {
+		model, mode string
+		priced      bool
+	}{
+		{"claude-sonnet-4-5", model.ModeStandard, false},
+		{"claude-sonnet-5", model.ModeStandard, true},
+		{"claude-opus-4-6", model.ModeFast, true},
+		{"claude-sonnet-5", model.ModeFast, false},
+		{"claude-future-9", model.ModeStandard, false},
+	} {
+		e := model.UsageEvent{Model: tc.model, ServiceMode: model.ServiceMode{ServiceMode: tc.mode}, Usage: model.TokenUsage{Input: 250000, Output: 100, Total: 250100}}
+		got, err := evaluateWithBasis(e, nil, FastWeightedBasis)
+		if err != nil || (got.pricedTokens > 0) != tc.priced {
+			t.Fatal(tc, got, err)
+		}
+	}
+}

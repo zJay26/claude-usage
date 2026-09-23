@@ -205,6 +205,53 @@ func TestRewriteDoesNotBlockHealthySource(t *testing.T) {
 	}
 }
 
+func TestRestartResumesCursorAndWaitsForTail(t *testing.T) {
+	s, st, home := openTest(t)
+	file := appendRecords(t, home, "restart.jsonl", message("a", counters(10, 0, 0, 2)))
+	scan(t, s, home)
+	partial, _ := json.Marshal(message("b", counters(20, 0, 0, 3)))
+	f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Write(partial[:len(partial)/2])
+	f.Close()
+	scan(t, s, home)
+	dbPath := st.DBPath()
+	st.Close()
+	reopened, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	s = &Scanner{Store: reopened}
+	f, err = os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Write(partial[len(partial)/2:])
+	f.WriteString("\n")
+	f.Close()
+	got := scan(t, s, home)
+	if got.Records != 1 || got.EventsInserted != 1 || total(t, reopened).Usage.Total != 35 {
+		t.Fatal(got, total(t, reopened))
+	}
+	if got = scan(t, s, home); got.EventsInserted != 0 || got.Records != 0 {
+		t.Fatal(got)
+	}
+}
+
+func TestInvalidIterationListKeepsTopLevelWithDiagnostic(t *testing.T) {
+	s, st, home := openTest(t)
+	u := counters(10, 0, 0, 2)
+	u["iterations"] = []any{map[string]any{"type": "message"}}
+	appendRecords(t, home, "invalid-iterations.jsonl", message("a", u))
+	got := scan(t, s, home)
+	if got.Warnings != 1 || total(t, st).Usage.Total != 12 || !total(t, st).CoverageIncomplete {
+		t.Fatal(got, total(t, st))
+	}
+}
+
 func TestIncompleteTailAndLargeContent(t *testing.T) {
 	s, st, home := openTest(t)
 	r := message("large", counters(3, 4, 5, 6))

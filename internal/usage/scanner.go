@@ -242,6 +242,7 @@ type cacheCreation struct {
 	Hour int64 `json:"ephemeral_1h_input_tokens"`
 }
 type rawUsage struct {
+	present bool
 	Input   int64          `json:"input_tokens"`
 	Output  int64          `json:"output_tokens"`
 	Read    int64          `json:"cache_read_input_tokens"`
@@ -256,6 +257,27 @@ type rawUsage struct {
 	Speed      string     `json:"speed"`
 	Tier       string     `json:"service_tier"`
 }
+
+func (u *rawUsage) UnmarshalJSON(data []byte) error {
+	type fields rawUsage
+	var decoded fields
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	var counts struct {
+		Input  *int64 `json:"input_tokens"`
+		Output *int64 `json:"output_tokens"`
+		Read   *int64 `json:"cache_read_input_tokens"`
+		Write  *int64 `json:"cache_creation_input_tokens"`
+	}
+	if err := json.Unmarshal(data, &counts); err != nil {
+		return err
+	}
+	*u = rawUsage(decoded)
+	u.present = counts.Input != nil || counts.Output != nil || counts.Read != nil || counts.Write != nil
+	return nil
+}
+
 type transcriptRecord struct {
 	Type       string `json:"type"`
 	UUID       string `json:"uuid"`
@@ -348,6 +370,17 @@ func (s *Scanner) record(ctx context.Context, tx *store.Store, r transcriptRecor
 	key := "claude:" + shortHash(identity)
 	u := r.Message.Usage
 	parts := u.Iterations
+	for _, part := range parts {
+		_, invalid := part.tokens()
+		if !part.present || invalid != nil {
+			result.Warnings++
+			if err = tx.AddWarning(ctx, "invalid_iterations", path, "无效迭代用量，仅保留可验证的顶层计数 / Invalid iterations; retained verifiable top-level counters"); err != nil {
+				return err
+			}
+			parts = nil
+			break
+		}
+	}
 	if len(parts) == 0 {
 		parts = []rawUsage{*u}
 	}
