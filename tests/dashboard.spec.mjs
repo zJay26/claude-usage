@@ -472,6 +472,29 @@ test("details supports today and an arbitrary local date from both date controls
   await expect(page.locator(".filter-chip")).toHaveCount(0);
 });
 
+test("late source discovery preserves filter edits", async ({ page }) => {
+  let releaseSources;
+  let sawSources;
+  const gate = new Promise(resolve => { releaseSources = resolve; });
+  const requested = new Promise(resolve => { sawSources = resolve; });
+  await page.route("**/api/v1/sources", async route => {
+    sawSources();
+    await gate;
+    await route.continue();
+  });
+  await page.goto(dashboardURL, { waitUntil: "networkidle" });
+  await page.locator("#filterButton").click();
+  await requested;
+  await page.locator("#filterAgent").selectOption("subagent");
+  await page.locator("#filterDate").fill("2026-01-01");
+  releaseSources();
+  await expect(page.locator("#filterHomes option")).toHaveCount(1);
+  await expect(page.locator("#filterAgent")).toHaveValue("subagent");
+  await expect(page.locator("#filterDate")).toHaveValue("2026-01-01");
+  await page.locator("#applyFilters").click();
+  await expect(page.locator(".filter-chip")).toHaveCount(2);
+});
+
 test("filter dimensions load lazily once instead of running startup breakdowns", async ({ page }) => {
   const dimensionRequests = [];
   const startupBreakdowns = [];

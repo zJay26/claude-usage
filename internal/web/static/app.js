@@ -522,8 +522,10 @@ async function loadSourceOptions() {
   const data = await api("/api/v1/sources");
   const sources = data.sources || [];
   const paths = [...new Set([...sources.map(s=>s.path), ...(state.filterOptions?.homes || []), ...(state.filters.home || [])].filter(Boolean))];
-  $("#filterHomes").innerHTML = paths.map(path=>`<option value="${escapeHTML(path)}">${escapeHTML(path)}</option>`).join("");
-  syncFilterForm();
+  const select = $("#filterHomes");
+  // Loading sources must not reset edits made while the request was in flight.
+  const selected = new Set(select.options.length ? [...select.selectedOptions].map(option => option.value) : state.filters.home || []);
+  select.innerHTML = paths.map(path=>`<option value="${escapeHTML(path)}"${selected.has(path) ? " selected" : ""}>${escapeHTML(path)}</option>`).join("");
   return data;
 }
 async function loadSourceSettings() {
