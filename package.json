@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "build:demo": "node scripts/build-demo.mjs dist/pages",
-    "capture:media": "node scripts/capture-screenshots.mjs",
+    "capture:media": "node scripts/capture-media.mjs",
+    "capture:screenshots": "node scripts/capture-screenshots.mjs",
     "pretest": "npm run build:demo",
     "test": "playwright test tests/dashboard.spec.mjs tests/demo.spec.mjs",
     "pretest:demo": "npm run build:demo",

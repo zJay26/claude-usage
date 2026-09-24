@@ -34,7 +34,7 @@ var messages = map[Locale]map[string]string{
   claude-usage version                 显示版本
 
 语言:
-  --lang 优先于 CLAUDE_USAGE_LANG，其次跟随系统语言；支持 en、zh-CN。
+  --lang 优先于 CLAUDE_USAGE_LANG，未指定时默认中文；支持 en、zh-CN。
 
 边界:
   “电脑”是运行 Claude 客户端和 claude-usage 的主机；不是 shell/tool 实际执行的远程环境。
@@ -103,7 +103,7 @@ Usage:
   claude-usage version                 Print the version
 
 Language:
-  --lang overrides CLAUDE_USAGE_LANG, then the system locale; supports en and zh-CN.
+  --lang overrides CLAUDE_USAGE_LANG; defaults to Chinese. Supports en and zh-CN.
 
 Boundary:
   “Machine” means the host running the Claude client and claude-usage, not a remote shell/tool target.
@@ -165,7 +165,7 @@ func Normalize(value string) (Locale, bool) {
 	}
 }
 
-func Detect(explicit, environment, system string) (Locale, error) {
+func Detect(explicit, environment string) (Locale, error) {
 	if explicit != "" {
 		locale, ok := Normalize(explicit)
 		if !ok {
@@ -174,9 +174,6 @@ func Detect(explicit, environment, system string) (Locale, error) {
 		return locale, nil
 	}
 	if locale, ok := Normalize(environment); ok {
-		return locale, nil
-	}
-	if locale, ok := Normalize(system); ok {
 		return locale, nil
 	}
 	return Chinese, nil

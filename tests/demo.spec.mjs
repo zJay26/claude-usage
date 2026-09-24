@@ -200,18 +200,18 @@ test("language priority, persistence, ARIA, pricing, scan, theme, and mobile lay
   await expect(page.locator("#localeButton")).toBeVisible();
 });
 
-test("saved and browser locales follow the documented fallback order", async ({ browser }) => {
-  const savedContext = await browser.newContext({ locale: "en-US" });
-  await savedContext.addInitScript(() => localStorage.setItem("claude-usage-locale", "zh-CN"));
+test("Chinese is the default while an explicit saved language is preserved", async ({ browser }) => {
+  const savedContext = await browser.newContext({ locale: "zh-CN" });
+  await savedContext.addInitScript(() => localStorage.setItem("claude-usage-locale", "en"));
   const savedPage = await savedContext.newPage();
   await savedPage.goto(baseURL, { waitUntil: "networkidle" });
-  await expect(savedPage.locator("html")).toHaveAttribute("lang", "zh-CN");
+  await expect(savedPage.locator("html")).toHaveAttribute("lang", "en");
   await savedContext.close();
 
   const browserContext = await browser.newContext({ locale: "en-US" });
   const browserPage = await browserContext.newPage();
   await browserPage.goto(baseURL, { waitUntil: "networkidle" });
-  await expect(browserPage.locator("html")).toHaveAttribute("lang", "en");
+  await expect(browserPage.locator("html")).toHaveAttribute("lang", "zh-CN");
   await browserContext.close();
 
   const fallbackContext = await browser.newContext({ locale: "fr-FR" });

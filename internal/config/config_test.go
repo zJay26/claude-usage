@@ -23,7 +23,7 @@ func TestIndependentPathsAndReadOnlyClaudeSource(t *testing.T) {
 		t.Fatal(e)
 	}
 	loaded, e := Load(paths)
-	if e != nil || loaded.Port != 43191 || loaded.ScanIntervalSeconds != 600 {
+	if e != nil || loaded.Port != 43190 || loaded.ScanIntervalSeconds != 600 {
 		t.Fatal(loaded, e)
 	}
 	homes, e := ClaudeHomes(loaded)

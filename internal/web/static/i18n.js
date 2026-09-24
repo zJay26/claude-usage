@@ -837,11 +837,6 @@
     if (query) return query;
     const saved = savedLocale();
     if (saved) return saved;
-    const browserLocales = root.navigator?.languages || [root.navigator?.language];
-    for (const value of browserLocales || []) {
-      const locale = normalize(value);
-      if (locale) return locale;
-    }
     return "zh-CN";
   }
 

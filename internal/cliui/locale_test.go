@@ -22,17 +22,17 @@ func TestCatalogsHaveIdenticalKeys(t *testing.T) {
 
 func TestDetectLocalePrecedence(t *testing.T) {
 	tests := []struct {
-		name, explicit, environment, system string
-		want                                Locale
+		name, explicit, environment string
+		want                        Locale
 	}{
-		{"flag", "zh-CN", "en", "en-US", Chinese},
-		{"environment", "", "en", "zh-CN", English},
-		{"system", "", "", "en_US.UTF-8", English},
-		{"fallback", "", "", "fr-FR", Chinese},
+		{"flag", "zh-CN", "en", Chinese},
+		{"environment", "", "en", English},
+		{"default", "", "", Chinese},
+		{"invalid environment", "", "fr-FR", Chinese},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, err := Detect(test.explicit, test.environment, test.system)
+			got, err := Detect(test.explicit, test.environment)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -44,7 +44,7 @@ func TestDetectLocalePrecedence(t *testing.T) {
 }
 
 func TestInvalidExplicitLocale(t *testing.T) {
-	if _, err := Detect("fr", "en", "en-US"); err == nil {
+	if _, err := Detect("fr", "en"); err == nil {
 		t.Fatal("expected invalid explicit locale to fail")
 	}
 }

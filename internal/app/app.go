@@ -32,7 +32,7 @@ import (
 )
 
 var (
-	Version   = "0.1.0-dev"
+	Version   = "0.1.1-dev"
 	Commit    = "dev"
 	BuildDate = "unknown"
 )
@@ -58,7 +58,7 @@ func (c CLI) Run(args []string) int {
 		fmt.Fprintln(c.Stderr, cliui.English.Text("error.prefix"), languageErr)
 		return 2
 	}
-	locale, languageErr := cliui.Detect(explicitLanguage, os.Getenv("CLAUDE_USAGE_LANG"), platform.UserLocale())
+	locale, languageErr := cliui.Detect(explicitLanguage, os.Getenv("CLAUDE_USAGE_LANG"))
 	if languageErr != nil {
 		fmt.Fprintln(c.Stderr, cliui.English.Text("error.prefix"), languageErr)
 		return 2

@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	DefaultPort  = 43191
+	DefaultPort  = 43190
 	databaseName = "usage.sqlite"
 )
 
