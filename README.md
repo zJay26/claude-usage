@@ -11,7 +11,7 @@
 [![CI](https://github.com/zJay26/claude-usage/actions/workflows/ci.yml/badge.svg)](https://github.com/zJay26/claude-usage/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/zJay26/claude-usage?display_name=tag&color=b35c40)](https://github.com/zJay26/claude-usage/releases/latest)
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/)
-[![License](https://img.shields.io/github/license/zJay26/claude-usage?color=8e6946)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-8e6946)](LICENSE)
 
 </div>
 
