@@ -134,17 +134,31 @@ func (s *Store) PutRequest(ctx context.Context, key, requestID, home, path strin
 			conflict = true
 		} else {
 			equal := len(old) == len(events)
+			classificationConflict := false
 			var before, after model.TokenUsage
 			for _, e := range old {
 				before = before.Add(e.Usage)
 			}
 			for i, e := range events {
+				if len(old) == len(events) {
+					// A plain message is also the fallback for missing iteration
+					// metadata. Preserve a specific classification when a stale
+					// top-level copy arrives after the detailed usage snapshot.
+					if genericIterationType(e.IterationType) && !genericIterationType(old[i].IterationType) {
+						e.IterationType = old[i].IterationType
+						events[i].IterationType = e.IterationType
+					} else if !genericIterationType(old[i].IterationType) && old[i].IterationType != e.IterationType {
+						classificationConflict = true
+					}
+				}
 				after = after.Add(e.Usage)
-				if i >= len(old) || !reflect.DeepEqual(e.Usage, old[i].Usage) || e.Model != old[i].Model || e.ServiceMode.ServiceMode != old[i].ServiceMode.ServiceMode {
+				if i >= len(old) || !reflect.DeepEqual(e.Usage, old[i].Usage) || e.Model != old[i].Model || e.ServiceMode.ServiceMode != old[i].ServiceMode.ServiceMode || e.IterationType != old[i].IterationType || (old[i].SessionID == "" && e.SessionID != "") {
 					equal = false
 				}
 			}
-			if !equal {
+			if classificationConflict {
+				conflict = true
+			} else if !equal {
 				// A later final snapshot can replace a partial snapshot; a stale
 				// mirror must never downgrade finalized or more complete counters.
 				monotonic := after.Input >= before.Input && after.Output >= before.Output && after.CachedInput >= before.CachedInput && after.CacheWriteInput >= before.CacheWriteInput && len(events) >= len(old)
@@ -167,7 +181,9 @@ func (s *Store) PutRequest(ctx context.Context, key, requestID, home, path strin
 			for i := range events {
 				if len(old) > 0 {
 					events[i].Timestamp = old[0].Timestamp
-					events[i].SessionID = old[0].SessionID
+					if old[0].SessionID != "" {
+						events[i].SessionID = old[0].SessionID
+					}
 					events[i].ProjectPath = old[0].ProjectPath
 				}
 			}
@@ -188,7 +204,9 @@ func (s *Store) PutRequest(ctx context.Context, key, requestID, home, path strin
 			err = e
 			return
 		}
-		_, err = s.writer().ExecContext(ctx, `INSERT INTO claude_requests VALUES(?,?,?,?) ON CONFLICT(request_key) DO UPDATE SET request_id=CASE WHEN excluded.request_id<>'' THEN excluded.request_id ELSE claude_requests.request_id END,events_json=excluded.events_json,complete=excluded.complete`, key, requestID, string(encoded), complete)
+		// Metadata enrichment must never turn a finalized request back into a
+		// partial one just because a mirror omitted stop_reason.
+		_, err = s.writer().ExecContext(ctx, `INSERT INTO claude_requests VALUES(?,?,?,?) ON CONFLICT(request_key) DO UPDATE SET request_id=CASE WHEN excluded.request_id<>'' THEN excluded.request_id ELSE claude_requests.request_id END,events_json=excluded.events_json,complete=excluded.complete`, key, requestID, string(encoded), complete || oldComplete)
 		if fresh {
 			inserted = int64(len(events))
 		}
@@ -229,7 +247,7 @@ func canEnrich(old, next []model.UsageEvent) bool {
 	}
 	for i, a := range old {
 		b := next[i]
-		if a.Model != b.Model || a.IterationType != b.IterationType || (a.ServiceMode.ServiceMode != model.ModeUnknown && a.ServiceMode.ServiceMode != b.ServiceMode.ServiceMode) {
+		if a.Model != b.Model || (!genericIterationType(a.IterationType) && a.IterationType != b.IterationType) || (a.ServiceMode.ServiceMode != model.ModeUnknown && a.ServiceMode.ServiceMode != b.ServiceMode.ServiceMode) {
 			return false
 		}
 		u, v := a.Usage, b.Usage
@@ -238,6 +256,10 @@ func canEnrich(old, next []model.UsageEvent) bool {
 		}
 	}
 	return true
+}
+
+func genericIterationType(value string) bool {
+	return value == "" || value == "message"
 }
 
 func (s *Store) RequestCount(ctx context.Context) (int64, error) {

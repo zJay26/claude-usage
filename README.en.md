@@ -33,7 +33,7 @@ One binary, with no Node.js, database service, account sign-in or API key needed
 
 ## Download and start
 
-Current release: **[v0.1.1](https://github.com/zJay26/claude-usage/releases/tag/v0.1.1)**. The default address is **[http://127.0.0.1:43190](http://127.0.0.1:43190)**. Links always point to the latest stable release; see the [release notes](docs/releases/v0.1.1.md).
+Current release: **[v0.1.2](https://github.com/zJay26/claude-usage/releases/tag/v0.1.2)**. The default address is **[http://127.0.0.1:43190](http://127.0.0.1:43190)**. Links always point to the latest stable release; see the [release notes](docs/releases/v0.1.2.md).
 
 | System | amd64 / x64 | arm64 |
 |---|---|---|

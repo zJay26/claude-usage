@@ -362,7 +362,7 @@
     };
   }
 
-  const demoUpdates = { current_version: "0.1.1-demo", latest_version: "0.1.1", release_url: "https://github.com/zJay26/claude-usage/releases", auto_check: true, available: false, can_install: false, phase: "idle", download_dir: "C:\\Users\\Demo\\Downloads\\claude-usage", default_download_dir: "C:\\Users\\Demo\\Downloads\\claude-usage", custom_download_dir: "", can_open_download_dir: false };
+  const demoUpdates = { current_version: "0.1.2-demo", latest_version: "0.1.2", release_url: "https://github.com/zJay26/claude-usage/releases", auto_check: true, available: false, can_install: false, phase: "idle", download_dir: "C:\\Users\\Demo\\Downloads\\claude-usage", default_download_dir: "C:\\Users\\Demo\\Downloads\\claude-usage", custom_download_dir: "", can_open_download_dir: false };
   async function syntheticFetch(input, init = {}) {
     const raw = typeof input === "string" ? input : input.url;
     const url = new URL(raw, root.location.href);
@@ -380,7 +380,7 @@
     }
     if (endpoint === "/api/v1/sources") return jsonResponse({sources:[{id:"demo-native",label:"Windows · synthetic",path:"synthetic://windows/.claude",platform:"windows",state:"ready"},{id:"demo-wsl",label:"Ubuntu · synthetic",path:"synthetic://wsl/.claude",platform:"wsl",state:"ready"}],extra_claude_homes:[],auto_discover_wsl:true,auto_start_wsl:true});
     if (endpoint === "/api/v1/status") return jsonResponse({
-      version: "0.1.1-demo", scanning: false,
+      version: "0.1.2-demo", scanning: false,
       status: {
         machine: { id: "synthetic-machine", label: "Synthetic Windows · demo", hostname: "synthetic-host", os: "windows", arch: "amd64" },
         last_scan: now.toISOString(), accounting_mode: "jsonl_only", otel_active: false,

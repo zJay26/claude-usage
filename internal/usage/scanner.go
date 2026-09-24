@@ -329,9 +329,6 @@ func (u rawUsage) tokens() (model.TokenUsage, error) {
 
 func (s *Scanner) record(ctx context.Context, tx *store.Store, r transcriptRecord, home, path string, result *ScanResult) error {
 	session := r.SessionID
-	if session == "" {
-		return nil
-	}
 	parent := r.Parent
 	agent := "main"
 	if strings.Contains(filepath.ToSlash(path), "/subagents/") {
@@ -341,7 +338,7 @@ func (s *Scanner) record(ctx context.Context, tx *store.Store, r transcriptRecor
 		agent = "subagent"
 	} else if r.Sidechain {
 		agent = "subagent"
-		if r.AgentID != "" {
+		if session != "" && r.AgentID != "" {
 			session += "/agent:" + r.AgentID
 		}
 	}
@@ -420,6 +417,15 @@ func (s *Scanner) record(ctx context.Context, tx *store.Store, r transcriptRecor
 	}
 	if len(events) == 0 {
 		return nil
+	}
+	// Session attribution is optional; request identity is what makes usage
+	// safe to account for and deduplicate. Do not invent a parent or session
+	// from an arbitrary transcript-copy filename.
+	if session == "" {
+		result.Warnings++
+		if err = tx.AddWarning(ctx, "missing_session", path, "用量缺少会话身份，已按请求入账 / Usage retained without session attribution"); err != nil {
+			return err
+		}
 	}
 	if err = tx.UpsertSession(ctx, model.SessionInfo{SessionID: session, ParentSessionID: parent, ForkedFromID: r.Fork, ProjectPath: r.CWD, Model: pricing.NormalizeModel(r.Message.Model), Source: firstNonEmpty(r.Entrypoint, "claude-code"), AgentType: agent, ClaudeHome: home, RolloutPath: path, CLIValue: r.Version, CreatedAt: at, UpdatedAt: at}); err != nil {
 		return err

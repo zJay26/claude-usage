@@ -13,7 +13,7 @@ body:
     attributes:
       label: Version
       description: Output of `claude-usage version`.
-      placeholder: claude-usage 0.1.1 (...)
+      placeholder: claude-usage 0.1.2 (...)
     validations:
       required: true
   - type: dropdown

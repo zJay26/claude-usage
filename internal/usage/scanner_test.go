@@ -347,3 +347,167 @@ func TestMalformedLineDoesNotPreventFollowingUsage(t *testing.T) {
 		t.Fatal(res)
 	}
 }
+
+func TestMissingSessionRetainsUsageAndDeduplicatesMirrors(t *testing.T) {
+	s, st, home := openTest(t)
+	other := filepath.Join(t.TempDir(), "mirror")
+	missing := message("missing-session", counters(10, 0, 0, 5))
+	delete(missing, "sessionId")
+	appendRecords(t, home, "a.jsonl", message("known", counters(10, 0, 0, 5)), missing)
+	got := scan(t, s, home)
+	if got.EventsInserted != 2 || got.Warnings != 1 || total(t, st).Usage.Total != 30 {
+		t.Fatalf("missing session lost valid request: scan=%+v summary=%+v", got, total(t, st))
+	}
+	warnings, err := st.Warnings(context.Background(), 10)
+	if err != nil || len(warnings) != 1 || warnings[0].Kind != "missing_session" {
+		t.Fatalf("missing session diagnostic: %+v %v", warnings, err)
+	}
+	appendRecords(t, other, "copy.jsonl", missing)
+	got = scan(t, s, home, other)
+	if got.EventsInserted != 0 || got.Duplicates != 1 || total(t, st).Usage.Total != 30 {
+		t.Fatalf("mirror counted twice: %+v", got)
+	}
+	filtered, err := st.Summary(context.Background(), model.Filter{Homes: []string{other}})
+	if err != nil || filtered.Usage.Total != 15 {
+		t.Fatalf("missing source association: %+v %v", filtered, err)
+	}
+	if got = scan(t, s, home, other); got.Records != 0 || got.EventsInserted != 0 || got.Warnings != 0 {
+		t.Fatalf("repeat scan was not idle: %+v", got)
+	}
+}
+
+func TestMissingSessionStillUsesSubagentDirectory(t *testing.T) {
+	s, st, home := openTest(t)
+	r := message("child-no-session", counters(10, 0, 0, 5))
+	delete(r, "sessionId")
+	appendRecords(t, home, "parent/subagents/agent-worker.jsonl", r)
+	scan(t, s, home)
+	events, err := st.Events(context.Background(), store.EventQuery{})
+	if err != nil || len(events) != 1 || events[0].SessionID != "parent/agent:worker" || events[0].AgentType != "subagent" {
+		t.Fatalf("subagent usage: %+v %v", events, err)
+	}
+	rels, err := st.SessionRelationships(context.Background())
+	if err != nil || rels["parent/agent:worker"].ParentSessionID != "parent" {
+		t.Fatalf("subagent relation: %+v %v", rels, err)
+	}
+}
+
+func TestMissingSessionStillValidatesRequestIdentity(t *testing.T) {
+	for _, tc := range []struct {
+		name                   string
+		message, request, uuid bool
+		tokens, warnings       int64
+	}{
+		{"message-only", true, false, false, 15, 1},
+		{"request-only", false, true, false, 15, 1},
+		{"record-only", false, false, true, 15, 2},
+		{"no-identity", false, false, false, 0, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, st, home := openTest(t)
+			r := message("identity", counters(10, 0, 0, 5))
+			delete(r, "sessionId")
+			if !tc.message {
+				delete(r["message"].(map[string]any), "id")
+			}
+			if !tc.request {
+				delete(r, "requestId")
+			}
+			if !tc.uuid {
+				delete(r, "uuid")
+			}
+			appendRecords(t, home, "a.jsonl", r)
+			got := scan(t, s, home)
+			if got.Warnings != tc.warnings || total(t, st).Usage.Total != tc.tokens {
+				t.Fatalf("identity validation: scan=%+v summary=%+v", got, total(t, st))
+			}
+		})
+	}
+}
+
+func TestLateSessionMetadataEnrichesAnExistingRequest(t *testing.T) {
+	s, st, home := openTest(t)
+	r := message("late-session", counters(10, 0, 0, 5))
+	delete(r, "sessionId")
+	r["message"].(map[string]any)["stop_reason"] = "end_turn"
+	appendRecords(t, home, "a.jsonl", r)
+	scan(t, s, home)
+	r["sessionId"] = "resolved-session"
+	appendRecords(t, home, "a.jsonl", r)
+	got := scan(t, s, home)
+	events, err := st.Events(context.Background(), store.EventQuery{})
+	if err != nil || got.Corrections != 1 || got.EventsInserted != 0 || len(events) != 1 || events[0].SessionID != "resolved-session" || total(t, st).Usage.Total != 15 {
+		t.Fatalf("late session attribution: scan=%+v events=%+v err=%v", got, events, err)
+	}
+}
+
+func TestLateIterationClassificationAndStaleCopies(t *testing.T) {
+	for _, complete := range []bool{false, true} {
+		t.Run(map[bool]string{false: "partial", true: "final"}[complete], func(t *testing.T) {
+			s, st, home := openTest(t)
+			r := message("late-type", counters(10, 0, 0, 5))
+			if complete {
+				r["message"].(map[string]any)["stop_reason"] = "end_turn"
+			}
+			appendRecords(t, home, "a.jsonl", r)
+			scan(t, s, home)
+			u := r["message"].(map[string]any)["usage"].(map[string]any)
+			part := counters(10, 0, 0, 5)
+			part["type"] = "compaction"
+			u["iterations"] = []any{part}
+			appendRecords(t, home, "a.jsonl", r)
+			got := scan(t, s, home)
+			events, err := st.Events(context.Background(), store.EventQuery{})
+			if err != nil || got.Corrections != 1 || got.EventsInserted != 0 || got.Warnings != 0 || len(events) != 1 || events[0].IterationType != "compaction" || total(t, st).Usage.Total != 15 {
+				t.Fatalf("late classification: scan=%+v events=%+v err=%v", got, events, err)
+			}
+			delete(u, "iterations")
+			appendRecords(t, home, "stale.jsonl", r)
+			got = scan(t, s, home)
+			events, err = st.Events(context.Background(), store.EventQuery{})
+			if err != nil || got.Corrections != 0 || got.Warnings != 0 || events[0].IterationType != "compaction" {
+				t.Fatalf("stale copy downgraded classification: scan=%+v events=%+v err=%v", got, events, err)
+			}
+			part["type"] = "advisor_message"
+			u["iterations"] = []any{part}
+			appendRecords(t, home, "a.jsonl", r)
+			got = scan(t, s, home)
+			events, err = st.Events(context.Background(), store.EventQuery{})
+			if err != nil || got.Warnings != 1 || events[0].IterationType != "compaction" || total(t, st).Usage.Total != 15 {
+				t.Fatalf("conflicting classification must be diagnosed: scan=%+v events=%+v err=%v", got, events, err)
+			}
+		})
+	}
+}
+
+func TestMetadataEnrichmentDoesNotReopenFinalUsage(t *testing.T) {
+	for _, field := range []string{"iteration_type", "cache_lifetime"} {
+		t.Run(field, func(t *testing.T) {
+			s, st, home := openTest(t)
+			u := counters(0, 0, 10, 5)
+			delete(u, "cache_creation")
+			r := message("final-enrichment", u)
+			r["message"].(map[string]any)["stop_reason"] = "end_turn"
+			appendRecords(t, home, "a.jsonl", r)
+			scan(t, s, home)
+			// A metadata-only mirror need not carry the original stop_reason.
+			delete(r["message"].(map[string]any), "stop_reason")
+			if field == "iteration_type" {
+				u["type"] = "compaction"
+			} else {
+				u["cache_creation"] = map[string]any{"ephemeral_5m_input_tokens": int64(10)}
+			}
+			appendRecords(t, home, "a.jsonl", r)
+			got := scan(t, s, home)
+			if got.Corrections != 1 || total(t, st).Usage.Total != 15 {
+				t.Fatalf("classification enrichment failed: %+v", got)
+			}
+			u["input_tokens"] = int64(100)
+			appendRecords(t, home, "a.jsonl", r)
+			got = scan(t, s, home)
+			if got.Warnings != 1 || total(t, st).Usage.Total != 15 {
+				t.Fatalf("metadata enrichment reopened final counters: scan=%+v summary=%+v", got, total(t, st))
+			}
+		})
+	}
+}

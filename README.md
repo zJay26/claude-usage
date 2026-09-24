@@ -33,7 +33,7 @@
 
 ## 下载与开始使用
 
-当前版本 **[v0.1.1](https://github.com/zJay26/claude-usage/releases/tag/v0.1.1)**，默认地址 **[http://127.0.0.1:43190](http://127.0.0.1:43190)**。下载链接始终指向最新稳定版，更新内容见 [发布说明](docs/releases/v0.1.1.md)。
+当前版本 **[v0.1.2](https://github.com/zJay26/claude-usage/releases/tag/v0.1.2)**，默认地址 **[http://127.0.0.1:43190](http://127.0.0.1:43190)**。下载链接始终指向最新稳定版，更新内容见 [发布说明](docs/releases/v0.1.2.md)。
 
 | 系统 | amd64 / x64 | arm64 |
 |---|---|---|
