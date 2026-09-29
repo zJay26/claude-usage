@@ -55,6 +55,14 @@ test("Pages subpath loads the canonical UI with synthetic-only APIs", async ({ p
   await expect(page.getByText("INTERACTIVE DEMO / SYNTHETIC DATA")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Per-machine usage overview" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator(".brand-mark")).toHaveAttribute("src", "./icon.svg");
+  await expect(page.locator(".brand-copy small")).toHaveText("by zJay");
+  expect(await page.locator(".brand-mark").evaluate(image => image.complete && image.naturalWidth > 0)).toBe(true);
+  for (const [name, type] of [["icon.svg", "image/svg+xml"], ["favicon-32.png", "image/png"], ["apple-touch-icon.png", "image/png"]]) {
+    const asset = await page.request.get(new URL(name, baseURL).href);
+    expect(asset.status()).toBe(200);
+    expect(asset.headers()["content-type"]).toBe(type);
+  }
   await expect(page.locator("#machineLabel")).toHaveText("Synthetic Windows · demo");
   const trend = page.locator("#usageTrendPanel");
   await expect(trend.getByRole("heading", { name: "Daily token usage" })).toBeVisible();

@@ -1,0 +1,125 @@
+{
+  "data": "synthetic only",
+  "timelineSeconds": 64.4,
+  "promoFrames": 1932,
+  "files": [
+    {
+      "file": "docs/media/claude-usage-promo-en-vertical.mp4",
+      "bytes": 18216096,
+      "sha256": "60154169204f610642e29bdbe386c64db3cbba4dc99af38f6fd2d8be730ebaae",
+      "duration": 64.4,
+      "video": {
+        "codec_name": "h264",
+        "codec_type": "video",
+        "width": 1080,
+        "height": 1920,
+        "avg_frame_rate": "30/1",
+        "nb_read_frames": "1932"
+      },
+      "audio": [
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "nb_read_frames": "3019"
+        }
+      ],
+      "decodedWithoutErrors": true
+    },
+    {
+      "file": "docs/media/claude-usage-promo-en.mp4",
+      "bytes": 17558591,
+      "sha256": "e82c30070a6bc3b08f93bb9ea9c526aa4ac8809d57838c18d163baff36a44139",
+      "duration": 64.4,
+      "video": {
+        "codec_name": "h264",
+        "codec_type": "video",
+        "width": 1920,
+        "height": 1080,
+        "avg_frame_rate": "30/1",
+        "nb_read_frames": "1932"
+      },
+      "audio": [
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "nb_read_frames": "3019"
+        }
+      ],
+      "decodedWithoutErrors": true
+    },
+    {
+      "file": "docs/media/claude-usage-promo-zh-vertical.mp4",
+      "bytes": 17616890,
+      "sha256": "d992fb23011700751b6516c03272db3aea3810b0375745bf2b4dd6b2a0369893",
+      "duration": 64.4,
+      "video": {
+        "codec_name": "h264",
+        "codec_type": "video",
+        "width": 1080,
+        "height": 1920,
+        "avg_frame_rate": "30/1",
+        "nb_read_frames": "1932"
+      },
+      "audio": [
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "nb_read_frames": "3019"
+        }
+      ],
+      "decodedWithoutErrors": true
+    },
+    {
+      "file": "docs/media/claude-usage-promo-zh.mp4",
+      "bytes": 17498899,
+      "sha256": "0c46939ef5b8511e3b2d377d12394cf97a8bbb43cc2d0893bbe5a6d17c1caf19",
+      "duration": 64.4,
+      "video": {
+        "codec_name": "h264",
+        "codec_type": "video",
+        "width": 1920,
+        "height": 1080,
+        "avg_frame_rate": "30/1",
+        "nb_read_frames": "1932"
+      },
+      "audio": [
+        {
+          "codec_name": "aac",
+          "codec_type": "audio",
+          "avg_frame_rate": "0/0",
+          "nb_read_frames": "3019"
+        }
+      ],
+      "decodedWithoutErrors": true
+    }
+  ],
+  "walkthroughs": [
+    {
+      "locale": "zh-CN",
+      "contentSeconds": 107.392,
+      "gifSeconds": 107.39,
+      "playbackSpeed": 1,
+      "chapterReadingMillis": 2000,
+      "typingMillisPerKey": 140,
+      "chapters": 14,
+      "warnings": [],
+      "errors": [],
+      "decodedWithoutErrors": true
+    },
+    {
+      "locale": "en",
+      "contentSeconds": 105.782,
+      "gifSeconds": 105.78,
+      "playbackSpeed": 1,
+      "chapterReadingMillis": 2000,
+      "typingMillisPerKey": 140,
+      "chapters": 14,
+      "warnings": [],
+      "errors": [],
+      "decodedWithoutErrors": true
+    }
+  ]
+}

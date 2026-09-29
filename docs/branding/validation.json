@@ -1,0 +1,238 @@
+{
+  "date": "2026-09-29",
+  "palette": "A / 陶土暖棕",
+  "geometryUnchanged": true,
+  "githubReadme": [
+    {
+      "file": "README.md",
+      "width": 1440,
+      "titleCenterOffset": 0,
+      "rightGap": 0,
+      "authorFont": "13.5px",
+      "links": 0,
+      "visualOverlap": false
+    },
+    {
+      "file": "README.md",
+      "width": 390,
+      "titleCenterOffset": 0,
+      "rightGap": 0,
+      "authorFont": "13.5px",
+      "links": 0,
+      "visualOverlap": false
+    },
+    {
+      "file": "README.md",
+      "width": 320,
+      "titleCenterOffset": 0,
+      "rightGap": 0,
+      "authorFont": "13.5px",
+      "links": 0,
+      "visualOverlap": false
+    },
+    {
+      "file": "README.en.md",
+      "width": 1440,
+      "titleCenterOffset": 0,
+      "rightGap": 0,
+      "authorFont": "13.5px",
+      "links": 0,
+      "visualOverlap": false
+    },
+    {
+      "file": "README.en.md",
+      "width": 390,
+      "titleCenterOffset": 0,
+      "rightGap": 0,
+      "authorFont": "13.5px",
+      "links": 0,
+      "visualOverlap": false
+    },
+    {
+      "file": "README.en.md",
+      "width": 320,
+      "titleCenterOffset": 0,
+      "rightGap": 0,
+      "authorFont": "13.5px",
+      "links": 0,
+      "visualOverlap": false
+    }
+  ],
+  "ui": [
+    {
+      "locale": "zh-CN",
+      "width": 1440,
+      "theme": "light",
+      "overflow": false,
+      "iconLoaded": true,
+      "iconWidth": 48,
+      "authorVisible": true,
+      "authorLinks": 0,
+      "overlap": false,
+      "darkMedia": false
+    },
+    {
+      "locale": "zh-CN",
+      "width": 1440,
+      "theme": "dark",
+      "overflow": false,
+      "iconLoaded": true,
+      "iconWidth": 48,
+      "authorVisible": true,
+      "authorLinks": 0,
+      "overlap": false,
+      "darkMedia": true
+    },
+    {
+      "locale": "zh-CN",
+      "width": 390,
+      "theme": "light",
+      "overflow": false,
+      "iconLoaded": true,
+      "iconWidth": 36,
+      "authorVisible": true,
+      "authorLinks": 0,
+      "overlap": false,
+      "darkMedia": false
+    },
+    {
+      "locale": "zh-CN",
+      "width": 390,
+      "theme": "dark",
+      "overflow": false,
+      "iconLoaded": true,
+      "iconWidth": 36,
+      "authorVisible": true,
+      "authorLinks": 0,
+      "overlap": false,
+      "darkMedia": true
+    },
+    {
+      "locale": "zh-CN",
+      "width": 320,
+      "theme": "light",
+      "overflow": false,
+      "iconLoaded": true,
+      "iconWidth": 36,
+      "authorVisible": true,
+      "authorLinks": 0,
+      "overlap": false,
+      "darkMedia": false
+    },
+    {
+      "locale": "zh-CN",
+      "width": 320,
+      "theme": "dark",
+      "overflow": false,
+      "iconLoaded": true,
+      "iconWidth": 36,
+      "authorVisible": true,
+      "authorLinks": 0,
+      "overlap": false,
+      "darkMedia": true
+    },
+    {
+      "locale": "en",
+      "width": 1440,
+      "theme": "light",
+      "overflow": false,
+      "iconLoaded": true,
+      "iconWidth": 48,
+      "authorVisible": true,
+      "authorLinks": 0,
+      "overlap": false,
+      "darkMedia": false
+    },
+    {
+      "locale": "en",
+      "width": 1440,
+      "theme": "dark",
+      "overflow": false,
+      "iconLoaded": true,
+      "iconWidth": 48,
+      "authorVisible": true,
+      "authorLinks": 0,
+      "overlap": false,
+      "darkMedia": true
+    },
+    {
+      "locale": "en",
+      "width": 390,
+      "theme": "light",
+      "overflow": false,
+      "iconLoaded": true,
+      "iconWidth": 36,
+      "authorVisible": true,
+      "authorLinks": 0,
+      "overlap": false,
+      "darkMedia": false
+    },
+    {
+      "locale": "en",
+      "width": 390,
+      "theme": "dark",
+      "overflow": false,
+      "iconLoaded": true,
+      "iconWidth": 36,
+      "authorVisible": true,
+      "authorLinks": 0,
+      "overlap": false,
+      "darkMedia": true
+    },
+    {
+      "locale": "en",
+      "width": 320,
+      "theme": "light",
+      "overflow": false,
+      "iconLoaded": true,
+      "iconWidth": 36,
+      "authorVisible": true,
+      "authorLinks": 0,
+      "overlap": false,
+      "darkMedia": false
+    },
+    {
+      "locale": "en",
+      "width": 320,
+      "theme": "dark",
+      "overflow": false,
+      "iconLoaded": true,
+      "iconWidth": 36,
+      "authorVisible": true,
+      "authorLinks": 0,
+      "overlap": false,
+      "darkMedia": true
+    }
+  ],
+  "localChecks": [
+    "go test ./...",
+    "go vet ./...",
+    "Windows amd64 build",
+    "28 Playwright tests"
+  ],
+  "walkthroughs": [
+    {
+      "locale": "zh-CN",
+      "contentSeconds": 107.392,
+      "gifSeconds": 107.39,
+      "playbackSpeed": 1,
+      "chapterReadingMillis": 2000,
+      "typingMillisPerKey": 140,
+      "chapters": 14,
+      "warnings": [],
+      "errors": []
+    },
+    {
+      "locale": "en",
+      "contentSeconds": 105.782,
+      "gifSeconds": 105.78,
+      "playbackSpeed": 1,
+      "chapterReadingMillis": 2000,
+      "typingMillisPerKey": 140,
+      "chapters": 14,
+      "warnings": [],
+      "errors": []
+    }
+  ],
+  "scope": "Branding and documentation only; no installed-service, accounting, database or public API changes."
+}
