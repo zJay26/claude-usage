@@ -1,12 +1,14 @@
 <div align="center">
 
-# claude-usage
+<img src="docs/branding/icon.png" width="112" height="112" alt="Claude Usage icon: terracotta usage bars and a warm brown Z">
+
+<h1 align="center">Claude Usage<sub><sub><p align="right"><sup>by zJay</sup></p></sub></sub></h1>
 
 **A clear view of your Claude usage.**
 
 *From Windows and WSL to every day, project, and task.*
 
-[Live demo](https://zjay26.github.io/claude-usage/?lang=en) · [Windows x64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-amd64.exe) · [Linux x64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-amd64) · [macOS Apple Silicon](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-arm64) · [All downloads](#download-and-start) · English / [简体中文](README.md)
+[Live demo](https://zjay26.github.io/claude-usage/?lang=en) · [Windows x64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-amd64.exe) · [Linux x64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-amd64) · [macOS Apple Silicon](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-arm64) · [All downloads](#quick-start) · English / [简体中文](README.md)
 
 [![CI](https://github.com/zJay26/claude-usage/actions/workflows/ci.yml/badge.svg)](https://github.com/zJay26/claude-usage/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/zJay26/claude-usage?display_name=tag&color=b35c40)](https://github.com/zJay26/claude-usage/releases/latest)
@@ -23,17 +25,13 @@ Overview → a 90-minute range → hourly drilldown → daily calendar → proje
 
 > A 98-second tour across 14 chapters, recorded directly from the current dashboard using synthetic data at original speed. A smooth pointer, gradual search input, and reading pauses make each step visible. The online demo does not read local files, set cookies, or collect usage data.
 
-## From today's total to an individual task
+## Quick start
 
-**claude-usage is a local dashboard for Claude token usage.** Start with totals, trends and API-equivalent costs, then follow a date, hour, model, project or task to understand where the tokens went. Windows automatically combines local and WSL transcripts, counting mirrored requests once.
-
-Ask “How much did I use today?” or “What did these 90 minutes, this project, or this task tree consume?” Inspect ordinary input, cache reads, both cache-write lifetimes, output and thinking, including compaction, Advisor and subagents. Pricing coverage keeps unknown prices visible.
-
-One binary, with no Node.js, database service, account sign-in or API key needed. The warm dashboard supports Chinese, English, light and dark themes, and mobile screens. Statistics stay on your computer; conversation bodies and tool output are not stored.
-
-## Download and start
+One binary, with no Node.js, database service, sign-in or API key required. Download it, install the user service, and open the dashboard.
 
 Current release: **[v0.1.2](https://github.com/zJay26/claude-usage/releases/tag/v0.1.2)**. The default address is **[http://127.0.0.1:43190](http://127.0.0.1:43190)**. Links always point to the latest stable release; see the [release notes](docs/releases/v0.1.2.md).
+
+### 1. Download for your system
 
 | System | amd64 / x64 | arm64 |
 |---|---|---|
@@ -41,44 +39,58 @@ Current release: **[v0.1.2](https://github.com/zJay26/claude-usage/releases/tag/
 | Linux / WSL | [x64 binary](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-amd64) | [ARM64 binary](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-arm64) |
 | macOS | [Intel binary](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-amd64) | [Apple Silicon binary](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-arm64) |
 
-### Windows
+Every release includes [SHA256SUMS](https://github.com/zJay26/claude-usage/releases/latest/download/SHA256SUMS). Use `Get-FileHash`, `sha256sum` or `shasum -a 256` to verify the file. macOS binaries are not Developer-ID signed or notarized; macOS may require you to allow them manually.
 
-For ARM64, replace `amd64` in the URL with `arm64`:
+### 2. Install and start
+
+Open a terminal in the download directory and run the command for your system. Use the actual filename if you downloaded a different architecture.
+
+**Windows x64 — PowerShell**
 
 ```powershell
-Invoke-WebRequest https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-amd64.exe -OutFile claude-usage.exe
-.\claude-usage.exe --lang en serve
+.\claude-usage-windows-amd64.exe --lang en install
 ```
 
-### Linux / WSL
+**Linux / WSL x64**
 
 ```bash
-curl -fL https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-amd64 -o claude-usage
-chmod +x claude-usage
-./claude-usage --lang en serve
+chmod +x claude-usage-linux-amd64
+./claude-usage-linux-amd64 --lang en install
 ```
 
-### macOS
-
-For Intel, replace `arm64` in the URL with `amd64`:
+**macOS — Apple Silicon**
 
 ```bash
-curl -fL https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-arm64 -o claude-usage
-chmod +x claude-usage
-./claude-usage --lang en serve
+chmod +x claude-usage-darwin-arm64
+./claude-usage-darwin-arm64 --lang en install
 ```
 
-macOS binaries are not Developer-ID signed or notarized, so macOS may require you to allow them manually. Every release includes [SHA256SUMS](https://github.com/zJay26/claude-usage/releases/latest/download/SHA256SUMS); verify the matching asset with `Get-FileHash`, `sha256sum`, or `shasum -a 256`.
+Installation starts the background service and enables login startup for the current user: a Windows startup entry, a systemd user service on Linux/WSL, or a macOS LaunchAgent. Keep the executable in a directory you intend to retain.
 
-### Background startup and updates
+### 3. Open the dashboard
 
-Open **http://127.0.0.1:43190/?lang=en** for the English dashboard. To enable login startup, explicitly run `.\claude-usage.exe --lang en install` on Windows or `./claude-usage --lang en install` on Linux/macOS. Installation uses the current user's Windows startup entry, a systemd user service on Linux/WSL, or a macOS LaunchAgent.
+Visit **[http://127.0.0.1:43190/?lang=en](http://127.0.0.1:43190/?lang=en)**. The first scan may take a moment; subsequent usage is indexed automatically.
+
+<details>
+<summary>Run in the foreground instead</summary>
+
+Replace `install` with `serve` in the command above, for example `.\claude-usage-windows-amd64.exe --lang en serve` on Windows. Keep the terminal open while using the dashboard, then press Ctrl+C to stop it. This does not add a login startup entry. If Linux/WSL has no systemd user session, use this mode.
+
+</details>
+
+### Updates and existing installations
 
 **Software updates** in the footer lets you check releases, choose a download directory and install an update. Downloads use SHA-256 verification, backups and failure recovery; automatic checks never install updates. `uninstall` removes the service while retaining statistics. `uninstall --purge` also removes application state.
 
 **Existing preferences remain effective.** An upgrade preserves a previously saved port. To move an existing v0.1.0 installation to 43190, stop its service, change `port` in the state directory's `config.json`, and restart. New visits and CLI sessions default to Chinese. The dashboard remembers a manually selected language; use `?lang=en` for English, and `--lang en` or `CLAUDE_USAGE_LANG=en` for the CLI.
 
-## Everyday tools in one dashboard
+## Features
+
+**Claude Usage is a local dashboard for Claude token usage.** Start with totals, trends and API-equivalent costs, then follow a date, hour, model, project or task to understand where the tokens went. Windows automatically combines local and WSL transcripts, counting mirrored requests once.
+
+Ask “How much did I use today?” or “What did these 90 minutes, this project, or this task tree consume?” Inspect ordinary input, cache reads, both cache-write lifetimes, output and thinking, including compaction, Advisor and subagents. Pricing coverage keeps unknown prices visible.
+
+One binary, with no Node.js, database service, account sign-in or API key needed. The warm dashboard supports Chinese, English, light and dark themes, and mobile screens. Statistics stay on your computer; conversation bodies and tool output are not stored.
 
 | Capability | What you can do |
 |---|---|
@@ -104,7 +116,9 @@ Open **http://127.0.0.1:43190/?lang=en** for the English dashboard. To enable lo
 </details>
 
 
-## Accounting
+## Accounting and estimated cost
+
+### Accounting
 
 - Reads `~/.claude/projects`, or `CLAUDE_CONFIG_DIR`, plus manually added directories. Windows discovers user WSL distributions automatically, excludes Docker distributions and may start stopped distributions. Both behaviors are configurable under **Log sources**; discovery and WSL scanning use hidden processes with timeouts.
 - Accepts Claude models and recognized Bedrock/Vertex identifiers; excludes third-party models and `<synthetic>` records. Main sessions, subagents and official transcript copies are supported.
@@ -116,7 +130,7 @@ Open **http://127.0.0.1:43190/?lang=en** for the English dashboard. To enable lo
 
 The dashboard includes overview/daily/details views, minute ranges, calendars and hourly drilldowns, model/project/task breakdowns, search, combined filters, task trees, JSON/CSV exports, English/Chinese, light/dark themes, font and density settings, reduced motion and mobile layouts.
 
-## Estimated cost
+### Estimated cost
 
 Costs are **token-equivalent estimates at current public API prices**. They are neither subscription deductions nor actual bills, and do not reconstruct historical pricing. The bundled catalog was checked on **2026-09-23** and includes Opus 5.5 and Sonnet 5.
 
@@ -145,7 +159,7 @@ Useful commands: `serve`, `scan --json`, `summary --json`, `doctor`, `update che
 
 Run `go test ./...`, `go vet ./...`, then `go build -trimpath -o claude-usage ./cmd/claude-usage`. Install test dependencies with `npm ci` and `npx playwright install chromium`, then run `CLAUDE_USAGE_BIN=./claude-usage npm test` (set the environment variable with PowerShell on Windows). Build before Playwright to exclude first-build latency.
 
-`npm run build:demo` generates the synthetic-only static demo. With FFmpeg installed, `npm run capture:media` records Chinese/English GIFs, MP4 videos, screenshots and chapter audit files, and `npm run capture:promo` renders the promo film. `npm run capture:screenshots` captures still images separately. Build scripts produce Windows/Linux/macOS binaries for amd64/arm64. CI includes Linux race checks and native macOS installation, restart and uninstallation tests.
+`npm run build:icons` exports browser, touch and README images from the canonical SVG. `npm run build:demo` generates the synthetic-only static demo. With FFmpeg installed, `npm run capture:media` records Chinese/English GIFs, MP4 videos, screenshots and chapter audit files, and `npm run capture:promo` renders the promo film. `npm run capture:screenshots` captures still images separately. Build scripts produce Windows/Linux/macOS binaries for amd64/arm64. CI includes Linux race checks and native macOS installation, restart and uninstallation tests.
 
 Existing `/api/v1` query, pricing, export, rescan and update APIs remain available. `GET/PUT /api/v1/sources` manages discovery and directories. Repeat `home=...` for source unions. Other filters include `since`, `until`, `date`, `model`, `project`, `source`, `agent_type`, `mode`, `session_id` and `q`. Dashboard pricing uses `cost_basis=claude_fast_weighted`; `current_standard_api_text_token_prices` provides the compatible Standard comparison. Exports include cache lifetimes, iteration types and source associations, without estimated charges. See [accounting](docs/accounting.md) and [validation](docs/validation.md).
 

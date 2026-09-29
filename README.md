@@ -1,12 +1,14 @@
 <div align="center">
 
-# claude-usage
+<img src="docs/branding/icon.png" width="112" height="112" alt="Claude Usage 图标：陶土色用量柱状图与暖棕色 Z">
+
+<h1 align="center">Claude Usage<sub><sub><p align="right"><sup>by zJay</sup></p></sub></sub></h1>
 
 **让 Claude 用量一目了然。**
 
 *从 Windows 与 WSL，到每一天、每个项目、每一次任务。*
 
-[在线体验](https://zjay26.github.io/claude-usage/) · [Windows x64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-amd64.exe) · [Linux x64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-amd64) · [macOS Apple Silicon](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-arm64) · [全部下载](#下载与开始使用) · [English](README.en.md) / 简体中文
+[在线体验](https://zjay26.github.io/claude-usage/) · [Windows x64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-amd64.exe) · [Linux x64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-amd64) · [macOS Apple Silicon](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-arm64) · [全部下载](#快速开始) · [English](README.en.md) / 简体中文
 
 [![CI](https://github.com/zJay26/claude-usage/actions/workflows/ci.yml/badge.svg)](https://github.com/zJay26/claude-usage/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/zJay26/claude-usage?display_name=tag&color=b35c40)](https://github.com/zJay26/claude-usage/releases/latest)
@@ -23,17 +25,13 @@
 
 > 约 99 秒、14 个展示环节，直接录制当前界面，使用合成数据，按原速播放。光标平滑移动、搜索逐字输入，关键画面留有阅读停顿。在线 Demo 不读取本机文件、不设 Cookie，也不采集使用数据。
 
-## 从今天的总量，看到每一次任务
+## 快速开始
 
-**claude-usage 是一个本地 Claude 用量仪表盘。** 打开就能看总量、趋势和 API 等价费用，再沿着日期、小时、模型、项目或任务，找到用量来自哪里。Windows 自动汇总本机与 WSL 日志，镜像里的同一请求只计算一次。
-
-既能查“今天用了多少”，也能查“刚才这 90 分钟、这个项目、这棵任务树用了多少”。输入、缓存读取、不同期限的缓存写入、输出与 Thinking 分开呈现；压缩、Advisor 和子代理也进入同一套统计。费用有定价覆盖率，未知价格不会被算成免费。
-
-一个程序即可运行，无需 Node.js、数据库服务、账号登录或 API Key。默认中文，暖色界面，同时支持英文、明暗主题与手机布局。统计保存在当前电脑，不保存对话正文或工具输出。
-
-## 下载与开始使用
+一个程序即可运行，无需 Node.js、数据库服务、账号登录或 API Key。下载后安装为后台服务，再打开页面即可使用。
 
 当前版本 **[v0.1.2](https://github.com/zJay26/claude-usage/releases/tag/v0.1.2)**，默认地址 **[http://127.0.0.1:43190](http://127.0.0.1:43190)**。下载链接始终指向最新稳定版，更新内容见 [发布说明](docs/releases/v0.1.2.md)。
+
+### 1. 下载对应系统的程序
 
 | 系统 | amd64 / x64 | arm64 |
 |---|---|---|
@@ -41,44 +39,58 @@
 | Linux / WSL | [x64 程序](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-amd64) | [ARM64 程序](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-arm64) |
 | macOS | [Intel 程序](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-amd64) | [Apple Silicon 程序](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-arm64) |
 
-### Windows
+每个版本附带 [SHA256SUMS](https://github.com/zJay26/claude-usage/releases/latest/download/SHA256SUMS)，可用 `Get-FileHash`、`sha256sum` 或 `shasum -a 256` 核对文件。macOS 程序未经 Apple Developer ID 签名或公证，系统可能要求手动允许打开。
 
-下载 x64 程序并前台运行；ARM64 设备将地址中的 `amd64` 改为 `arm64`：
+### 2. 安装并启动
+
+在下载目录打开终端，执行对应系统的命令。如果下载了其他架构，请使用实际文件名。
+
+**Windows x64 — PowerShell**
 
 ```powershell
-Invoke-WebRequest https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-amd64.exe -OutFile claude-usage.exe
-.\claude-usage.exe serve
+.\claude-usage-windows-amd64.exe install
 ```
 
-### Linux / WSL
+**Linux / WSL x64**
 
 ```bash
-curl -fL https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-amd64 -o claude-usage
-chmod +x claude-usage
-./claude-usage serve
+chmod +x claude-usage-linux-amd64
+./claude-usage-linux-amd64 install
 ```
 
-### macOS
-
-Apple Silicon；Intel 设备将地址中的 `arm64` 改为 `amd64`：
+**macOS — Apple Silicon**
 
 ```bash
-curl -fL https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-arm64 -o claude-usage
-chmod +x claude-usage
-./claude-usage serve
+chmod +x claude-usage-darwin-arm64
+./claude-usage-darwin-arm64 install
 ```
 
-macOS 程序未经 Apple Developer ID 签名或公证，系统可能要求手动允许打开。每个版本附带 [SHA256SUMS](https://github.com/zJay26/claude-usage/releases/latest/download/SHA256SUMS)，可用 `Get-FileHash`、`sha256sum` 或 `shasum -a 256` 核对对应资产。
+安装会启动后台服务并设置当前用户的登录自启：Windows 使用启动项，Linux/WSL 使用 systemd 用户服务，macOS 使用 LaunchAgent。请将程序放在准备长期保留的目录中。
 
-### 后台运行与更新
+### 3. 打开仪表盘
 
-前台运行后访问 **http://127.0.0.1:43190**。需要登录自启时，再主动执行 `claude-usage install`（PowerShell 使用 `.\claude-usage.exe install`，Linux/macOS 使用 `./claude-usage install`）。Windows 使用当前用户启动项，Linux/WSL 使用 systemd 用户服务，macOS 使用 LaunchAgent。
+访问 **[http://127.0.0.1:43190](http://127.0.0.1:43190)**。首次扫描可能需要稍等；后续新增用量会自动采集。
+
+<details>
+<summary>只想临时前台运行</summary>
+
+将上面命令中的 `install` 改为 `serve`，例如 Windows 使用 `.\claude-usage-windows-amd64.exe serve`。使用期间保持终端打开，结束时按 Ctrl+C 停止，不会设置登录自启。Linux/WSL 没有 systemd 用户会话时也可使用此方式。
+
+</details>
+
+### 更新与已有安装
 
 在页脚打开“软件更新”，可以检查版本、选择下载目录并主动下载安装。更新包含 SHA-256 校验、备份与失败恢复；自动检查不会自动安装。`uninstall` 停止并移除服务，保留统计；`uninstall --purge` 还会删除本工具的状态目录。
 
 **已有配置会继续生效。** v0.1.0 保存的端口不会被升级覆盖；如需迁到 43190，先停止已有服务，再将状态目录 `config.json` 的 `port` 改为 `43190` 并重新启动。首次访问默认中文，手动选择的语言会保留；网页可用 `?lang=en` 打开英文，命令行可用 `--lang en`。
 
-## 日常需要的功能，一次看全
+## 功能介绍
+
+**Claude Usage 是一个本地 Claude 用量仪表盘。** 打开就能看总量、趋势和 API 等价费用，再沿着日期、小时、模型、项目或任务，找到用量来自哪里。Windows 自动汇总本机与 WSL 日志，镜像里的同一请求只计算一次。
+
+既能查“今天用了多少”，也能查“刚才这 90 分钟、这个项目、这棵任务树用了多少”。输入、缓存读取、不同期限的缓存写入、输出与 Thinking 分开呈现；压缩、Advisor 和子代理也进入同一套统计。费用有定价覆盖率，未知价格不会被算成免费。
+
+一个程序即可运行，无需 Node.js、数据库服务、账号登录或 API Key。默认中文，暖色界面，同时支持英文、明暗主题与手机布局。统计保存在当前电脑，不保存对话正文或工具输出。
 
 | 功能 | 可以做什么 |
 |---|---|
@@ -104,7 +116,9 @@ macOS 程序未经 Apple Developer ID 签名或公证，系统可能要求手动
 </details>
 
 
-## 来源与计量
+## 计量与费用
+
+### 来源与计量
 
 - 默认读取 `~/.claude/projects`；设置 `CLAUDE_CONFIG_DIR` 可指定替代目录，界面的“日志来源”可添加多个目录。
 - Windows 默认自动发现用户 WSL 发行版，排除 Docker 内部发行版，允许启动未运行的发行版。可在“日志来源”关闭发现或启动。查询使用发行版默认用户和有超时的隐藏进程。
@@ -117,7 +131,7 @@ macOS 程序未经 Apple Developer ID 签名或公证，系统可能要求手动
 
 Dashboard 提供概览、每日月历、小时下钻、分钟范围、模型/项目/任务统计、任务树、搜索、组合筛选、JSON/CSV 导出、中英双语、明暗主题、字体与密度设置及移动端布局。
 
-## 费用含义
+### 费用含义
 
 费用是**按当前公开 API 单价计算的 Token 等价估算**，不是订阅扣额或真实账单，也不追溯历史价格。内置官方价格核验日期为 **2026-09-23**，包含 Opus 5.5、Sonnet 5 等型号。
 
@@ -155,7 +169,7 @@ npx playwright install chromium
 CLAUDE_USAGE_BIN=./claude-usage npm test
 ```
 
-Windows 设置 `$env:CLAUDE_USAGE_BIN` 后运行 `npm test`。先构建程序，避免把首次编译耗时误判为浏览器启动失败。`npm run build:demo` 生成纯合成数据演示；安装 FFmpeg 后，`npm run capture:media` 可重录中英双语 GIF、MP4、截图与逐章验收记录，`npm run capture:promo` 可重新生成宣传片，`npm run capture:screenshots` 单独生成截图。`scripts/build.sh` / `scripts/build.ps1` 构建六个平台资产；CI 运行 Linux race 检查及 macOS 原生服务生命周期验证。
+Windows 设置 `$env:CLAUDE_USAGE_BIN` 后运行 `npm test`。先构建程序，避免把首次编译耗时误判为浏览器启动失败。`npm run build:icons` 从统一 SVG 导出浏览器、触摸与 README 图标；`npm run build:demo` 生成纯合成数据演示；安装 FFmpeg 后，`npm run capture:media` 可重录中英双语 GIF、MP4、截图与逐章验收记录，`npm run capture:promo` 可重新生成宣传片，`npm run capture:screenshots` 单独生成截图。`scripts/build.sh` / `scripts/build.ps1` 构建六个平台资产；CI 运行 Linux race 检查及 macOS 原生服务生命周期验证。
 
 保留 `/api/v1`：`status`、`summary`、`timeseries`、`breakdown`、`dimensions`、`sessions`、`session-tree`、`session-estimates`、`cost-estimate`、`export`、`pricing`、`pricing/overrides`、`rescan`、`updates`。新增 `GET/PUT /api/v1/sources`。筛选可重复传入 `home=...`，另支持 `since`、`until`、`date`、`model`、`project`、`source`、`agent_type`、`mode`、`session_id` 和 `q`。
 

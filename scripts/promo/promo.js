@@ -113,7 +113,7 @@
 
   // Brand reveal: the four bars of the mark rise one after another.
   const brandSvg = $("#brand svg");
-  const brandBars = [...brandSvg.querySelectorAll("g rect")];
+  const brandBars = [...brandSvg.querySelectorAll("g path")];
   for (const bar of brandBars) set(bar, { transformBox: "fill-box", transformOrigin: "50% 100%" });
 
   const hookBars = $(".hook-bars");

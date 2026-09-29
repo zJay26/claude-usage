@@ -73,7 +73,7 @@ The default online demo and its tests are unchanged.
 The pipeline runs offline:
 
 1. `scripts/promo/assets.mjs` captures 2× Dashboard stills for every beat, together with the rectangles that the camera, spotlight, labels, and cursor are anchored to. The portrait cut uses a 1000 × 1150 Dashboard viewport. The demo notice banner is left out of the stills; the film carries its own "synthetic demo data" label instead.
-2. `scripts/promo/promo.html`, `promo.css`, and `promo.js` compose the scenes from a beat sheet. `scripts/promo/mark.svg` is the Dashboard's four-bar mark at promo scale. Every frame is a pure function of time, so `scripts/capture-promo.mjs` seeks frame by frame and pipes lossless screenshots into FFmpeg.
+2. `scripts/promo/promo.html`, `promo.css`, and `promo.js` compose the scenes from a beat sheet. `internal/web/static/icon.svg` supplies the same selected A icon used by the Dashboard, browser icons and README; `npm run build:icons` exports its PNG variants. Every frame is a pure function of time, so `scripts/capture-promo.mjs` seeks frame by frame and pipes lossless screenshots into FFmpeg.
 3. `scripts/promo/music.mjs` synthesizes a license-free soundtrack in Node and normalizes it to −16 LUFS with FFmpeg's two-pass `loudnorm`.
 
 `scripts/promo/timeline.json` is the single source of scene timing for picture and sound. Several environment variables help when rendering or iterating:

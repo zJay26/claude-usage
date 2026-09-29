@@ -1,0 +1,19 @@
+{
+  "name": "A / 陶土暖棕",
+  "source": "https://github.com/zJay26/codex-usage/blob/main/internal/web/static/icon.svg",
+  "sourceSHA256": "7e92041911d94442b07616f0167e4bdb7ed469abc140aa9c7aa13f4355f61bce",
+  "geometrySHA256": "16df201e7e365d64787911931eb02be3f46c2a6f2c5ea7bd25671cd4de1741e2",
+  "tile": [
+    "#FFFDF8",
+    "#F7F5F0"
+  ],
+  "bars": [
+    "#D28267",
+    "#C86F50"
+  ],
+  "z": [
+    "#A68C75",
+    "#8F7560"
+  ],
+  "author": "zJay"
+}

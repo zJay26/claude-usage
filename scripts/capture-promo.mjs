@@ -46,8 +46,8 @@ async function openStage(browser, locale, format, manifests) {
   page.on("request", request => { if (!request.url().startsWith("file:")) errors.push(`External request: ${request.url()}`); });
   const otherLocale = locale === "en" ? "zh-CN" : "en";
   const other = manifests[`${otherLocale}-${format}`] || manifests[`${locale}-${format}`];
-  // The Dashboard draws its four-bar mark in CSS; mark.svg is the same mark at promo scale.
-  const icon = await readFile(path.join(promoDir, "mark.svg"), "utf8");
+  // Share the exact icon used by the Dashboard and browser assets.
+  const icon = await readFile(path.join(repoRoot, "internal", "web", "static", "icon.svg"), "utf8");
   await page.addInitScript(data => { window.PROMO = data; }, { timeline, locale, format, icon, assets: manifests[`${locale}-${format}`], other });
   await page.goto(pathToFileURL(path.join(promoDir, "promo.html")).href);
   await page.evaluate(() => window.promo.ready);
