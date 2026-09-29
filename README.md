@@ -29,62 +29,68 @@ https://github.com/user-attachments/assets/8c0b488b-5262-45d9-a553-fa12d7045557
 
 ## 快速开始
 
-一个程序即可运行，无需 Node.js、数据库服务、账号登录或 API Key。下载后安装为后台服务，再打开页面即可使用。
+**只有两步：下载适合你电脑的程序，然后运行一次 `install`。**
 
-当前版本 **[v0.1.2](https://github.com/zJay26/claude-usage/releases/tag/v0.1.2)**，默认地址 **[http://127.0.0.1:43190](http://127.0.0.1:43190)**。下载链接始终指向最新稳定版，更新内容见 [发布说明](docs/releases/v0.1.2.md)。
+装好后它会在后台运行，并自动整理你电脑上已有的 Claude 记录。以后想看用量，用浏览器打开 **[http://127.0.0.1:43190](http://127.0.0.1:43190)** 即可。不用装 Node.js 或数据库，不用登录账号，也不需要 API Key，数据不会离开你的电脑。
 
-### 1. 下载对应系统的程序
+### 第 1 步：选对版本，下载
 
-| 系统 | amd64 / x64 | arm64 |
-|---|---|---|
-| Windows | [x64 程序](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-amd64.exe) | [ARM64 程序](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-arm64.exe) |
-| Linux / WSL | [x64 程序](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-amd64) | [ARM64 程序](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-arm64) |
-| macOS | [Intel 程序](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-amd64) | [Apple Silicon 程序](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-arm64) |
+不确定自己是哪种电脑，可以对照下表：
 
-每个版本附带 [SHA256SUMS](https://github.com/zJay26/claude-usage/releases/latest/download/SHA256SUMS)，可用 `Get-FileHash`、`sha256sum` 或 `shasum -a 256` 核对文件。macOS 程序未经 Apple Developer ID 签名或公证，系统可能要求手动允许打开。
+| 你的电脑 | 点击下载 |
+|---|---|
+| Windows（绝大多数电脑） | [Windows x64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-amd64.exe) |
+| Windows ARM 设备（少数机型；可在“设置 → 系统 → 关于”看到“ARM 处理器”） | [Windows ARM64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-arm64.exe) |
+| Mac，M 系列芯片（M1 / M2 / M3 / M4 等） | [macOS Apple Silicon](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-arm64) |
+| Mac，Intel 芯片（左上角苹果菜单 → 关于本机，写着“Intel”） | [macOS Intel](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-amd64) |
+| Linux / WSL（绝大多数电脑） | [Linux x64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-amd64) |
+| Linux / WSL ARM 设备 | [Linux ARM64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-arm64) |
 
-### 2. 安装并启动
+### 第 2 步：运行 install
 
-在下载目录打开终端，执行对应系统的命令。如果下载了其他架构，请使用实际文件名。
+**已经用浏览器下载好了？** 打开终端（Windows 用 PowerShell），进入文件所在的文件夹，运行 `<程序文件名> install` 就行。例如 Windows：`.\claude-usage-windows-amd64.exe install`；Mac / Linux 需先执行 `chmod +x <程序文件名>` 赋予运行权限，再执行 `./<程序文件名> install`。
 
-**Windows x64 — PowerShell**
+**想省事？** 直接复制下面对应系统的命令，粘贴到终端回车，下载和安装一次完成：
+
+**Windows**：开始菜单搜索“PowerShell”并打开，粘贴运行。ARM64 设备把地址里的 `amd64` 改成 `arm64`：
 
 ```powershell
-.\claude-usage-windows-amd64.exe install
+Invoke-WebRequest https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-amd64.exe -OutFile claude-usage.exe
+.\claude-usage.exe install
 ```
 
-**Linux / WSL x64**
+**macOS**：打开“终端”（启动台里搜索），粘贴运行。以下是 Apple Silicon 版；Intel 设备把地址里的 `arm64` 改成 `amd64`：
 
 ```bash
-chmod +x claude-usage-linux-amd64
-./claude-usage-linux-amd64 install
+curl -fL https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-arm64 -o claude-usage
+chmod +x claude-usage
+./claude-usage install
 ```
 
-**macOS — Apple Silicon**
+程序未经 Apple Developer ID 签名或公证，用浏览器下载的文件首次运行时可能被系统拦截，需要在“系统设置 → 隐私与安全性”里手动允许。
+
+**Linux / WSL**：打开终端，粘贴运行。以下是 x64 版；ARM64 设备把地址里的 `amd64` 改成 `arm64`：
 
 ```bash
-chmod +x claude-usage-darwin-arm64
-./claude-usage-darwin-arm64 install
+curl -fL https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-amd64 -o claude-usage
+chmod +x claude-usage
+./claude-usage install
 ```
 
-安装会启动后台服务并设置当前用户的登录自启：Windows 使用启动项，Linux/WSL 使用 systemd 用户服务，macOS 使用 LaunchAgent。请将程序放在准备长期保留的目录中。
+`install` 会把程序复制到自己的目录，启动后台服务，并设置当前用户登录后自动启动：Windows 使用启动项，Linux / WSL 使用 systemd 用户服务，macOS 使用 LaunchAgent。安装完成后，下载的那个文件可以删除。
 
-### 3. 打开仪表盘
+### 第 3 步：打开仪表盘
 
-访问 **[http://127.0.0.1:43190](http://127.0.0.1:43190)**。首次扫描可能需要稍等；后续新增用量会自动采集。
+用浏览器访问 **[http://127.0.0.1:43190](http://127.0.0.1:43190)**（这个地址只有你自己的电脑能打开）。首次扫描可能需要稍等；之后新增的用量会自动统计，日常直接打开这个地址就行。
+
+想卸载，再运行一次 `<程序文件名> uninstall`：会停止并移除服务，保留统计；加上 `--purge` 会连统计数据一起删除。
 
 <details>
 <summary>只想临时前台运行</summary>
 
-将上面命令中的 `install` 改为 `serve`，例如 Windows 使用 `.\claude-usage-windows-amd64.exe serve`。使用期间保持终端打开，结束时按 Ctrl+C 停止，不会设置登录自启。Linux/WSL 没有 systemd 用户会话时也可使用此方式。
+将上面命令中的 `install` 改为 `serve`，例如 Windows 使用 `.\claude-usage-windows-amd64.exe serve`。使用期间保持终端打开，结束时按 Ctrl+C 停止，不会设置登录自启。Linux / WSL 没有 systemd 用户会话时也可使用此方式。
 
 </details>
-
-### 更新与已有安装
-
-在页脚打开“软件更新”，可以检查版本、选择下载目录并主动下载安装。更新包含 SHA-256 校验、备份与失败恢复；自动检查不会自动安装。`uninstall` 停止并移除服务，保留统计；`uninstall --purge` 还会删除本工具的状态目录。
-
-**已有配置会继续生效。** v0.1.0 保存的端口不会被升级覆盖；如需迁到 43190，先停止已有服务，再将状态目录 `config.json` 的 `port` 改为 `43190` 并重新启动。首次访问默认中文，手动选择的语言会保留；网页可用 `?lang=en` 打开英文，命令行可用 `--lang en`。
 
 ## 功能介绍
 

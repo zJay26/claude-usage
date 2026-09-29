@@ -29,62 +29,68 @@ Overview → a 90-minute range → hourly drilldown → daily calendar → proje
 
 ## Quick start
 
-One binary, with no Node.js, database service, sign-in or API key required. Download it, install the user service, and open the dashboard.
+**Just two steps: download the program for your computer, then run `install` once.**
 
-Current release: **[v0.1.2](https://github.com/zJay26/claude-usage/releases/tag/v0.1.2)**. The default address is **[http://127.0.0.1:43190](http://127.0.0.1:43190)**. Links always point to the latest stable release; see the [release notes](docs/releases/v0.1.2.md).
+It then runs in the background and organizes the Claude history already on your computer. To check your usage later, open **[http://127.0.0.1:43190/?lang=en](http://127.0.0.1:43190/?lang=en)** in a browser. No Node.js or database to install, no sign-in, no API key, and your data never leaves your computer.
 
-### 1. Download for your system
+### Step 1: Pick your version and download
 
-| System | amd64 / x64 | arm64 |
-|---|---|---|
-| Windows | [x64 binary](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-amd64.exe) | [ARM64 binary](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-arm64.exe) |
-| Linux / WSL | [x64 binary](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-amd64) | [ARM64 binary](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-arm64) |
-| macOS | [Intel binary](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-amd64) | [Apple Silicon binary](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-arm64) |
+Not sure which one you need? Match your computer to the table:
 
-Every release includes [SHA256SUMS](https://github.com/zJay26/claude-usage/releases/latest/download/SHA256SUMS). Use `Get-FileHash`, `sha256sum` or `shasum -a 256` to verify the file. macOS binaries are not Developer-ID signed or notarized; macOS may require you to allow them manually.
+| Your computer | Download |
+|---|---|
+| Windows (most PCs) | [Windows x64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-amd64.exe) |
+| Windows ARM device (uncommon; Settings → System → About shows an ARM processor) | [Windows ARM64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-arm64.exe) |
+| Mac with Apple silicon (M1 / M2 / M3 / M4, etc.) | [macOS Apple Silicon](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-arm64) |
+| Mac with an Intel chip (Apple menu → About This Mac says “Intel”) | [macOS Intel](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-amd64) |
+| Linux / WSL (most computers) | [Linux x64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-amd64) |
+| Linux / WSL ARM device | [Linux ARM64](https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-arm64) |
 
-### 2. Install and start
+### Step 2: Run install
 
-Open a terminal in the download directory and run the command for your system. Use the actual filename if you downloaded a different architecture.
+**Already downloaded it in your browser?** Open a terminal (PowerShell on Windows), go to the folder containing the file, and run `<file name> --lang en install`. On Windows, for example: `.\claude-usage-windows-amd64.exe --lang en install`. On Mac / Linux, first run `chmod +x <file name>` to make it executable, then `./<file name> --lang en install`.
 
-**Windows x64 — PowerShell**
+**Want the shortcut?** Copy the commands for your system below and paste them into a terminal; they download and install in one go.
+
+**Windows**: search for “PowerShell” in the Start menu, open it, and paste. For ARM64 devices, replace `amd64` with `arm64` in the URL:
 
 ```powershell
-.\claude-usage-windows-amd64.exe --lang en install
+Invoke-WebRequest https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-windows-amd64.exe -OutFile claude-usage.exe
+.\claude-usage.exe --lang en install
 ```
 
-**Linux / WSL x64**
+**macOS**: open Terminal (search for it in Launchpad) and paste. This is the Apple Silicon version; for Intel, replace `arm64` with `amd64` in the URL:
 
 ```bash
-chmod +x claude-usage-linux-amd64
-./claude-usage-linux-amd64 --lang en install
+curl -fL https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-darwin-arm64 -o claude-usage
+chmod +x claude-usage
+./claude-usage --lang en install
 ```
 
-**macOS — Apple Silicon**
+The binary is not Apple Developer-ID signed or notarized, so a file downloaded in a browser may be blocked on first run; allow it manually in System Settings → Privacy & Security.
+
+**Linux / WSL**: open a terminal and paste. This is the x64 version; for ARM64 devices, replace `amd64` with `arm64` in the URL:
 
 ```bash
-chmod +x claude-usage-darwin-arm64
-./claude-usage-darwin-arm64 --lang en install
+curl -fL https://github.com/zJay26/claude-usage/releases/latest/download/claude-usage-linux-amd64 -o claude-usage
+chmod +x claude-usage
+./claude-usage --lang en install
 ```
 
-Installation starts the background service and enables login startup for the current user: a Windows startup entry, a systemd user service on Linux/WSL, or a macOS LaunchAgent. Keep the executable in a directory you intend to retain.
+`install` copies the program to its own directory, starts the background service, and enables login startup for the current user: a Windows startup entry, a systemd user service on Linux / WSL, or a macOS LaunchAgent. Once installation finishes, you can delete the file you downloaded.
 
-### 3. Open the dashboard
+### Step 3: Open the dashboard
 
-Visit **[http://127.0.0.1:43190/?lang=en](http://127.0.0.1:43190/?lang=en)**. The first scan may take a moment; subsequent usage is indexed automatically.
+Open **[http://127.0.0.1:43190/?lang=en](http://127.0.0.1:43190/?lang=en)** in your browser (only your own computer can open this address). The first scan may take a moment; new usage is then counted automatically, so from now on just open that address to check.
+
+To uninstall, run `<file name> uninstall` again: it stops and removes the service and keeps your statistics; add `--purge` to delete the statistics too.
 
 <details>
 <summary>Run in the foreground instead</summary>
 
-Replace `install` with `serve` in the command above, for example `.\claude-usage-windows-amd64.exe --lang en serve` on Windows. Keep the terminal open while using the dashboard, then press Ctrl+C to stop it. This does not add a login startup entry. If Linux/WSL has no systemd user session, use this mode.
+Replace `install` with `serve` in the command above, for example `.\claude-usage-windows-amd64.exe --lang en serve` on Windows. Keep the terminal open while using the dashboard, then press Ctrl+C to stop it. This does not add a login startup entry. If Linux / WSL has no systemd user session, use this mode.
 
 </details>
-
-### Updates and existing installations
-
-**Software updates** in the footer lets you check releases, choose a download directory and install an update. Downloads use SHA-256 verification, backups and failure recovery; automatic checks never install updates. `uninstall` removes the service while retaining statistics. `uninstall --purge` also removes application state.
-
-**Existing preferences remain effective.** An upgrade preserves a previously saved port. To move an existing v0.1.0 installation to 43190, stop its service, change `port` in the state directory's `config.json`, and restart. New visits and CLI sessions default to Chinese. The dashboard remembers a manually selected language; use `?lang=en` for English, and `--lang en` or `CLAUDE_USAGE_LANG=en` for the CLI.
 
 ## Features
 
