@@ -23,7 +23,7 @@
 
 [亲手试用在线 Demo](https://zjay26.github.io/claude-usage/) · [高清演示视频](docs/media/claude-usage-demo-zh.mp4) · [宣传片](docs/media/claude-usage-promo-zh.mp4)（[竖屏版](docs/media/claude-usage-promo-zh-vertical.mp4)） · [录制说明](docs/media/README.md)
 
-> 约 99 秒、14 个展示环节，直接录制当前界面，使用合成数据，按原速播放。光标平滑移动、搜索逐字输入，关键画面留有阅读停顿。在线 Demo 不读取本机文件、不设 Cookie，也不采集使用数据。
+> 约 107 秒、14 个展示环节，直接录制当前界面，使用合成数据，按原速播放。光标平滑移动、搜索逐字输入，关键画面留有阅读停顿。在线 Demo 不读取本机文件、不设 Cookie，也不采集使用数据。
 
 ## 快速开始
 

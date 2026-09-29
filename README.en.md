@@ -23,7 +23,7 @@ Overview → a 90-minute range → hourly drilldown → daily calendar → proje
 
 [Try the interactive demo](https://zjay26.github.io/claude-usage/?lang=en) · [Full-resolution video](docs/media/claude-usage-demo-en.mp4) · [Promo film](docs/media/claude-usage-promo-en.mp4) ([vertical](docs/media/claude-usage-promo-en-vertical.mp4)) · [Recording notes](docs/media/README.md)
 
-> A 98-second tour across 14 chapters, recorded directly from the current dashboard using synthetic data at original speed. A smooth pointer, gradual search input, and reading pauses make each step visible. The online demo does not read local files, set cookies, or collect usage data.
+> A 106-second tour across 14 chapters, recorded directly from the current dashboard using synthetic data at original speed. A smooth pointer, gradual search input, and reading pauses make each step visible. The online demo does not read local files, set cookies, or collect usage data.
 
 ## Quick start
 
