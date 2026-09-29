@@ -19,7 +19,7 @@
 
 概览 → 90 分钟用量查询 → 小时下钻 → 每日月历 → 项目与任务树 → 搜索 → Fast + 模型组合筛选 → CSV 导出 → Windows / WSL 来源 → 模型与缓存定价 → 显示设置、明暗主题与中英切换。
 
-[亲手试用在线 Demo](https://zjay26.github.io/claude-usage/) · [高清演示视频](docs/media/claude-usage-demo-zh.mp4) · [录制说明](docs/media/README.md)
+[亲手试用在线 Demo](https://zjay26.github.io/claude-usage/) · [高清演示视频](docs/media/claude-usage-demo-zh.mp4) · [宣传片](docs/media/claude-usage-promo-zh.mp4)（[竖屏版](docs/media/claude-usage-promo-zh-vertical.mp4)） · [录制说明](docs/media/README.md)
 
 > 约 99 秒、14 个展示环节，直接录制当前界面，使用合成数据，按原速播放。光标平滑移动、搜索逐字输入，关键画面留有阅读停顿。在线 Demo 不读取本机文件、不设 Cookie，也不采集使用数据。
 
@@ -155,7 +155,7 @@ npx playwright install chromium
 CLAUDE_USAGE_BIN=./claude-usage npm test
 ```
 
-Windows 设置 `$env:CLAUDE_USAGE_BIN` 后运行 `npm test`。先构建程序，避免把首次编译耗时误判为浏览器启动失败。`npm run build:demo` 生成纯合成数据演示；安装 FFmpeg 后，`npm run capture:media` 可重录中英双语 GIF、MP4、截图与逐章验收记录，`npm run capture:screenshots` 单独生成截图。`scripts/build.sh` / `scripts/build.ps1` 构建六个平台资产；CI 运行 Linux race 检查及 macOS 原生服务生命周期验证。
+Windows 设置 `$env:CLAUDE_USAGE_BIN` 后运行 `npm test`。先构建程序，避免把首次编译耗时误判为浏览器启动失败。`npm run build:demo` 生成纯合成数据演示；安装 FFmpeg 后，`npm run capture:media` 可重录中英双语 GIF、MP4、截图与逐章验收记录，`npm run capture:promo` 可重新生成宣传片，`npm run capture:screenshots` 单独生成截图。`scripts/build.sh` / `scripts/build.ps1` 构建六个平台资产；CI 运行 Linux race 检查及 macOS 原生服务生命周期验证。
 
 保留 `/api/v1`：`status`、`summary`、`timeseries`、`breakdown`、`dimensions`、`sessions`、`session-tree`、`session-estimates`、`cost-estimate`、`export`、`pricing`、`pricing/overrides`、`rescan`、`updates`。新增 `GET/PUT /api/v1/sources`。筛选可重复传入 `home=...`，另支持 `since`、`until`、`date`、`model`、`project`、`source`、`agent_type`、`mode`、`session_id` 和 `q`。
 

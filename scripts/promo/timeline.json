@@ -1,0 +1,23 @@
+{
+  "fps": 30,
+  "duration": 64.4,
+  "bpm": 120,
+  "poster": 13.9,
+  "scenes": [
+    { "id": "hook", "start": 0, "end": 3.5 },
+    { "id": "brand", "start": 3.5, "end": 6.5 },
+    { "id": "total", "start": 6.5, "end": 11 },
+    { "id": "daily", "start": 11, "end": 14.5 },
+    { "id": "hourly", "start": 14.5, "end": 18 },
+    { "id": "range", "start": 18, "end": 22.5 },
+    { "id": "calendar", "start": 22.5, "end": 26.5 },
+    { "id": "breakdown", "start": 26.5, "end": 30.5 },
+    { "id": "sessions", "start": 30.5, "end": 34.5 },
+    { "id": "tree", "start": 34.5, "end": 38.5 },
+    { "id": "sources", "start": 38.5, "end": 43 },
+    { "id": "extras", "start": 43, "end": 51.4 },
+    { "id": "interface", "start": 51.4, "end": 57.4 },
+    { "id": "privacy", "start": 57.4, "end": 60.4 },
+    { "id": "cta", "start": 60.4, "end": 64.4 }
+  ]
+}
