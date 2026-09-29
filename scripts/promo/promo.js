@@ -607,7 +607,7 @@
     });
   }
 
-  const command = "./claude-usage serve";
+  const command = "./claude-usage install";
   const ctaParts = [$(".cta-icon"), $("#cta h1"), $(".cta-tagline"), $(".cta-title"), $(".terminal"), ...document.querySelectorAll(".cta-links li")];
   function renderCTA(t) {
     const ct = S("cta");
