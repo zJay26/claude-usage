@@ -15,6 +15,8 @@
 
 </div>
 
+https://github.com/user-attachments/assets/cc751eed-0bc9-47dc-a7d0-ffbb82f993b2
+
 ![Claude Usage at natural speed: minute ranges, hourly drilldown, calendar, projects, task trees, search, combined filters, export, Windows/WSL sources, cache pricing and display preferences](docs/media/claude-usage-demo-en.gif)
 
 Overview → a 90-minute range → hourly drilldown → daily calendar → projects and task trees → search → Fast + model filters → CSV export → Windows / WSL sources → model and cache pricing → display settings, themes and language.
