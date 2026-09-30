@@ -17,7 +17,7 @@
 
 </div>
 
-https://github.com/user-attachments/assets/e4f8a1f6-c7d2-47b8-bc67-529d944734be
+https://github.com/user-attachments/assets/3a5f7139-c50a-4291-b87a-2e742bcd1bd0
 
 ![Claude Usage at natural speed: minute ranges, hourly drilldown, calendar, projects, task trees, search, combined filters, export, Windows/WSL sources, cache pricing and display preferences](docs/media/claude-usage-demo-en.gif)
 
