@@ -17,7 +17,7 @@
 
 </div>
 
-https://github.com/user-attachments/assets/8cbb19fe-2498-499d-b47b-b7568e91f3f7
+https://github.com/user-attachments/assets/6fb3aa8d-7210-4836-b209-9e2a3f571406
 
 ![Claude Usage 实速演示：分钟查询、小时下钻、月历、项目、任务树、搜索、组合筛选、导出、Windows/WSL 来源、缓存定价与主题语言设置](docs/media/claude-usage-demo.gif)
 

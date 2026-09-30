@@ -58,7 +58,7 @@ The film opens with a question and the brand, then shows eleven features, one id
 10. Export, live usage updates, and software updates
 11. Theme, language, and mobile layout
 
-It closes with the privacy promise and the command to start.
+It closes with the privacy promise and the install command.
 
 Each shot uses the same devices. The camera settles on one area, the rest of the page dims, a label names what matters, and a cursor performs the click that leads to the next still.
 
